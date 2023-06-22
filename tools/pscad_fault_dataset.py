@@ -7,9 +7,9 @@ import pywt
 import math
 
 file_list = []
-directory = '/Users/raulmendy/Desktop/FPL/Dataset_for_Transformer_&_PAR_transients/data_for_transformer_and_par/transient_disturbances/capacitor switching'
+#directory = '/Users/raulmendy/Desktop/FPL/Dataset_for_Transformer_&_PAR_transients/data_for_transformer_and_par/transient_disturbances/capacitor switching'
 # directory = input('Enter Folder Directory: ')
-# directory = '/Users/josephaccurso/Downloads/Dataset for Transformer & PAR transients/data for transformer and par/transient disturbances/capacitor switching'
+directory = '/Users/josephaccurso/Downloads/Dataset for Transformer & PAR transients/data for transformer and par/transient disturbances/capacitor switching'
 for filename in os.listdir(directory):
     f = os.path.join(directory, filename)
     if os.path.isfile(f):
@@ -147,3 +147,7 @@ plt.show()
 # print(DWT(1,'db1'))
 # plt.plot(DWT(1,'db1'))
 # plt.show
+level = 1
+for i in time[::level+1]:
+    time.remove(i)
+print(len(time))
