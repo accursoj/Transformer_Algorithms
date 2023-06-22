@@ -144,10 +144,34 @@ plt.legend(loc=1)
 plt.title('Discrete Fourier Transform Capcitor Switching Example')
 plt.show()
 
-# print(DWT(1,'db1'))
-# plt.plot(DWT(1,'db1'))
-# plt.show
-level = 1
-for i in time[::level+1]:
-    time.remove(i)
-print(len(time))
+DWT_levels = 4
+coeffs = DWT(1,'db1',DWT_levels)
+# print(len(time))
+time_tmp = []
+listoftmps = []
+time_tmp = time
+
+
+plt.figure()
+# for i in range(DWT_levels):
+#     index = i + 1
+#     for j in time[1::2]:
+#         time_tmp.remove(j)
+#     # lsttotal.append(time_tmp)
+#     # listoftmps[i] = time_tmp[:]
+# print("total list")
+# print(lsttotal)
+# print("original time")
+# print(time)
+# print("time in half")
+# print(time_tmp)
+lsttmp = []
+lsttmp = time
+lsttotal = []
+iter = 0
+while iter < 4:
+    for i in time[1::2]:
+        time.remove(i)
+    print(len(time))
+    lsttotal[iter] += time
+    iter += 1
