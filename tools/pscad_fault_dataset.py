@@ -7,18 +7,13 @@ import pywt
 import math
 
 file_list = []
-#directory = '/Users/raulmendy/Desktop/FPL/Dataset_for_Transformer_&_PAR_transients/data_for_transformer_and_par/transient_disturbances/capacitor switching'
-# directory = input('Enter Folder Directory: ')
+#directory = input('Enter Folder Directory: ')
 directory = '/Users/josephaccurso/Downloads/Dataset for Transformer & PAR transients/data for transformer and par/transient disturbances/capacitor switching'
 for filename in os.listdir(directory):
     f = os.path.join(directory, filename)
     if os.path.isfile(f):
         file_list.append(f)
-#print(file_list)
 
-#figure, axis = plt.subplots(3,1)
-
-#Capacitor switchig
 for i in range(len(file_list)):
 #for i in range(15):
     data = np.asarray(pd.read_csv(file_list[i], header=None))
@@ -30,7 +25,27 @@ for i in range(len(file_list)):
         phaseB.append(data[j,2])
         phaseC.append(data[j,3])
 
+    # # Plot 3-Phase Signals of Every File in 'file_list'
+    # plt.xlabel('Time (s)')
+    # plt.ylabel('Differential Current (A)')
+    # plt.plot(time,phaseA,label='Phase A')
+    # plt.plot(time,phaseB,label='Phase B')
+    # plt.plot(time,phaseC,label='Phase C')
+    # plt.legend(loc=1)
+    # plt.title('Capactior Switching Transient Data Example')
+    # print('Presenting data from: ',file_list[i])
+    # plt.show()
 
+# # Plot 3-Phase Signal of Last Opened File in 'file_list'
+# plt.xlabel('Time (s)')
+# plt.ylabel('Differential Current (A)')
+# plt.plot(time,phaseA,label='Phase A')
+# plt.plot(time,phaseB,label='Phase B')
+# plt.plot(time,phaseC,label='Phase C')
+# plt.legend(loc=1)
+# plt.title('Capactior Switching Transient Data Example')
+# print('Presenting data from: ',file_list[i])
+# plt.show()
 
 # L-2 Norm Equation
 def L2(phase):
@@ -77,10 +92,10 @@ def DFT_freq(phase):
     return freq
 
 # Discrete Wavelet Transform
-def DWT(phase, wavelet):
-    coeffs = pywt.wavedec(data[:,phase],wavelet,level=2)
+def DWT(phase, wavelet, level_val):
+    #coeffs = pywt.dwt(data[:,phase],wavelet)
+    coeffs = pywt.wavedec(data[:,phase],wavelet,level=level_val)
     return coeffs
-
 
 L2_arr = np.zeros((len(file_list), 3))
 curve_length_arr = np.zeros((len(file_list), 3))
@@ -92,86 +107,136 @@ for i in range(len(file_list)):
         curve_length_arr[i,j] = curve_length(j+1)
         kurtosis_arr[i,j] = kurtosis(j+1)
 
-print(L2_arr)
-print(curve_length_arr)
-print(kurtosis_arr)
+#print(L2_arr)
+#print(curve_length_arr)
+#print(kurtosis_arr)
 
+# # Plot L2-Energy vs Kurtosis
+# plt.xlabel('L2-Energy Norm')
+# plt.ylabel('Kurtosis') 
+# plt.scatter(L2_arr[:,0],kurtosis_arr[:,0],marker='.',label='Phase A')
+# plt.scatter(L2_arr[:,1],kurtosis_arr[:,1],marker='.',label='Phase B')
+# plt.scatter(L2_arr[:,2],kurtosis_arr[:,2],marker='.',label='Phase C')
+# plt.legend(loc=1)
+# plt.title('Kurtosis and L2-Energy Norm of Capacitor Switching Transient Faults')
+# plt.show()
 
-plt.xlabel('Time (s)')
-plt.ylabel('Differential Current (A)')
-plt.plot(time,phaseA,label='Phase A')
-plt.plot(time,phaseB,label='Phase B')
-plt.plot(time,phaseC,label='Phase C')
-plt.legend(loc=1)
-plt.title('Capactior Switching Transient Data Example')
-print('Presenting data from: ',file_list[i])
-plt.show()
-    
-plt.xlabel('L2-Energy Norm')
-plt.ylabel('Kurtosis') 
-plt.scatter(L2_arr[:,0],kurtosis_arr[:,0],marker='.',label='Phase A')
-plt.scatter(L2_arr[:,1],kurtosis_arr[:,1],marker='.',label='Phase B')
-plt.scatter(L2_arr[:,2],kurtosis_arr[:,2],marker='.',label='Phase C')
-plt.legend(loc=1)
-plt.title('Kurtosis and L2-Energy Norm of Capacitor Switching Transient Faults')
-plt.show()
+# # Plot L2-Energy vs Curve Length
+# plt.xlabel('L2-Energy Norm')
+# plt.ylabel('Curve Length')
+# plt.scatter(L2_arr[:,0],curve_length_arr[:,0],marker='.',label='Phase A')
+# plt.scatter(L2_arr[:,1],curve_length_arr[:,1],marker='.',label='Phase B')
+# plt.scatter(L2_arr[:,2],curve_length_arr[:,2],marker='.',label='Phase C')
+# plt.legend(loc=1)
+# plt.title('Curve Length and L2-Energy Norm of Capacitor Switching Transient Faults')
+# plt.show()
 
-plt.xlabel('L2-Energy Norm')
-plt.ylabel('Curve Length')
-plt.scatter(L2_arr[:,0],curve_length_arr[:,0],marker='.',label='Phase A')
-plt.scatter(L2_arr[:,1],curve_length_arr[:,1],marker='.',label='Phase B')
-plt.scatter(L2_arr[:,2],curve_length_arr[:,2],marker='.',label='Phase C')
-plt.legend(loc=1)
-plt.title('Curve Length and L2-Energy Norm of Capacitor Switching Transient Faults')
-plt.show()
+# # Plot Curve Length vs Kurtosis
+# plt.xlabel('Curve Length')
+# plt.ylabel('Kurtosis')
+# plt.scatter(curve_length_arr[:,0],kurtosis_arr[:,0],marker='.',label='Phase A')
+# plt.scatter(curve_length_arr[:,1],kurtosis_arr[:,1],marker='.',label='Phase B')
+# plt.scatter(curve_length_arr[:,2],kurtosis_arr[:,2],marker='.',label='Phase C')
+# plt.legend(loc=1)
+# plt.title('Kurtosis and Curve Length of Capacitor Switching Transient Faults')
+# plt.show()
 
-plt.xlabel('Curve Length')
-plt.ylabel('Kurtosis')
-plt.scatter(curve_length_arr[:,0],kurtosis_arr[:,0],marker='.',label='Phase A')
-plt.scatter(curve_length_arr[:,1],kurtosis_arr[:,1],marker='.',label='Phase B')
-plt.scatter(curve_length_arr[:,2],kurtosis_arr[:,2],marker='.',label='Phase C')
-plt.legend(loc=1)
-plt.title('Kurtosis and Curve Length of Capacitor Switching Transient Faults')
-plt.show()
+# # Plot DFT Frequencies
+# plt.xlabel('Frequency')
+# plt.ylabel('Amplitude')
+# plt.plot(DFT_freq(1),DFT(1),marker='.',label='Phase A')
+# plt.plot(DFT_freq(2),DFT(2),marker='.',label='Phase B')
+# plt.plot(DFT_freq(3),DFT(3),marker='.',label='Phase C')
+# plt.legend(loc=1)
+# plt.title('Discrete Fourier Transform Capcitor Switching Example')
+# plt.show()
 
+dwt_levels = int(input('Input Level of Discrete Wavelet Transform Decomposition: '))
+dwt_phase = 1
 
-plt.xlabel('Frequency')
-plt.ylabel('Amplitude')
-plt.plot(DFT_freq(1),DFT(1),marker='.',label='Phase A')
-plt.plot(DFT_freq(2),DFT(2),marker='.',label='Phase B')
-plt.plot(DFT_freq(3),DFT(3),marker='.',label='Phase C')
-plt.legend(loc=1)
-plt.title('Discrete Fourier Transform Capcitor Switching Example')
-plt.show()
+coeffs = DWT(dwt_phase,'db1',dwt_levels)
 
-DWT_levels = 4
-coeffs = DWT(1,'db1',DWT_levels)
-# print(len(time))
-time_tmp = []
-listoftmps = []
-time_tmp = time
+def time_rescale(lst, iterations):
+    modified_lst = lst.copy()
+    modified_lists = []
+    for x in range(iterations):
+        modified_lst = modified_lst[::2]
+        modified_lists.append(modified_lst)
+    return modified_lists
 
+res_time_lst = time_rescale(time, dwt_levels)
+res_time_lst.reverse()
 
-plt.figure()
-# for i in range(DWT_levels):
+subplot_rows = dwt_levels + 1
+
+# # Plot DWT Decompositions with Shared Y-Axis
+# fig, axs = plt.subplots(subplot_rows,1,sharey = True,figsize=(10,10))
+# axs[0].set_title(f'Level {dwt_levels} Approximate Coefficients')
+# axs[0].plot(res_time_lst[0],coeffs[0])
+# axs[0].set_xlabel('Time')
+# axs[0].set_ylabel('Coefficient Values')
+# for i in range(dwt_levels):
 #     index = i + 1
-#     for j in time[1::2]:
-#         time_tmp.remove(j)
-#     # lsttotal.append(time_tmp)
-#     # listoftmps[i] = time_tmp[:]
-# print("total list")
-# print(lsttotal)
-# print("original time")
-# print(time)
-# print("time in half")
-# print(time_tmp)
-lsttmp = []
-lsttmp = time
-lsttotal = []
-iter = 0
-while iter < 4:
-    for i in time[1::2]:
-        time.remove(i)
-    print(len(time))
-    lsttotal[iter] += time
-    iter += 1
+#     axs[index].set_title(f'Level {dwt_levels - i} Detail Coefficients')
+#     axs[index].plot(res_time_lst[i],coeffs[index])
+#     axs[index].set_xlabel('Time')
+#     axs[index].set_ylabel('Coefficient Values')
+# plt.tight_layout()
+# plt.show()
+
+# # Plot DWT Decomposition with Independent Y-Axis
+# fig, axs = plt.subplots(subplot_rows,1,figsize=(10,10))
+# axs[0].set_title(f'Level {dwt_levels} Approximate Coefficients')
+# axs[0].plot(res_time_lst[0],coeffs[0])
+# axs[0].set_xlabel('Time')
+# axs[0].set_ylabel('Coefficient Values')
+# for i in range(dwt_levels):
+#     index = i + 1
+#     axs[index].set_title(f'Level {dwt_levels - i} Detail Coefficients')
+#     axs[index].plot(res_time_lst[i],coeffs[index])
+#     axs[index].set_xlabel('Time')
+#     axs[index].set_ylabel('Coefficient Values')
+# plt.tight_layout()
+# plt.show()
+
+# # Plot DWT Decomposition and Original Signal
+# fig, axs = plt.subplots((subplot_rows+1),1,figsize=(10,10))
+# axs[0].set_title(f'Phase {dwt_phase} Signal')
+# axs[0].plot(time,phaseA)
+# axs[0].set_xlabel('Time')
+# axs[0].set_ylabel('Differential Current')
+# axs[1].set_title(f'Level {dwt_levels} Approximate Coefficients')
+# axs[1].plot(res_time_lst[0],coeffs[0])
+# axs[1].set_xlabel('Time')
+# axs[1].set_ylabel('Coefficient Values')
+# for i in range(dwt_levels):
+#     index = i + 1
+#     axs[index+1].set_title(f'Level {dwt_levels - i} Detail Coefficients')
+#     axs[index+1].plot(res_time_lst[i],coeffs[index])
+#     axs[index+1].set_xlabel('Time')
+#     axs[index+1].set_ylabel('Coefficient Values')   
+# plt.tight_layout()
+# plt.show()
+
+# Plot 3 Phases of Original Signal and DWT Decomposition
+fig, axs = plt.subplots((subplot_rows+1),3,figsize=(12,10))
+phase_list = [phaseA, phaseB, phaseC]
+color_list = ['#1f77b4','#ff7f0e','#2ca02c']
+for phase in range(3):
+    coeffs = DWT(phase+1,'db1',dwt_levels)
+    axs[0,phase].set_title(f'Phase {phase+1} Signal')
+    axs[0,phase].plot(time,phase_list[phase],color=color_list[phase])
+    axs[0,phase].set_xlabel('Time')
+    axs[0,phase].set_ylabel('Differential Current')
+    axs[1,phase].set_title(f'Level {dwt_levels} Approximate Coefficients')
+    axs[1,phase].plot(res_time_lst[0],coeffs[0],color=color_list[phase])
+    axs[1,phase].set_xlabel('Time')
+    axs[1,phase].set_ylabel('Coefficient Values')
+    for i in range(dwt_levels):
+        index = i + 2
+        axs[index,phase].set_title(f'Level {dwt_levels - i} Detail Coefficients')
+        axs[index,phase].plot(res_time_lst[i],coeffs[index-1],color=color_list[phase])
+        axs[index,phase].set_xlabel('Time')
+        axs[index,phase].set_ylabel('Coefficient Values')
+    plt.tight_layout()
+plt.show()
