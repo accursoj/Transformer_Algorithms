@@ -35,6 +35,19 @@ plt.title("OT change based on HUFL")
 plt.xlabel('High Useful Load')
 plt.ylabel('OT')
 plt.show()
+
+#define predictor and response variables
+X, y = dataset[["hours", "prep_exams"]], dataset.score
+
+#fit regression model
+lin_reg.fit(X, y)
+
+#calculate R-squared of regression model
+r_squared = lin_reg.score(X, y)
+
+#view R-squared value
+print(r_squared)
+
  
 # polynomial regression model
 from sklearn.preprocessing import PolynomialFeatures
