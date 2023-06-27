@@ -11,3 +11,11 @@ plt.show()
 transformer = pd.read_csv("ETTm2_month1.csv", usecols=columns)
 plt.plot(transformer.date, transformer.OT)
 plt.show()
+
+transformer = pd.read_csv("ETTh1_month1.csv", usecols=columns)
+plt.plot(transformer.date, transformer.OT)
+plt.show()
+
+transformer = pd.read_csv("ETTh2_month1.csv", usecols=columns)
+plt.plot(transformer.date, transformer.OT)
+plt.show()
