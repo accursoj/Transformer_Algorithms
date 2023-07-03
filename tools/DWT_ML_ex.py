@@ -1,4 +1,5 @@
 import os
+import time
 from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,6 +8,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import confusion_matrix
+from sklearn.metrics import roc_curve, roc_auc_score
 from sklearn import svm
 import seaborn as sns
 import scipy
@@ -37,7 +39,7 @@ def calculate_crossings(list_values):
     no_mean_crossings = len(mean_crossing_indices)
     return [no_zero_crossings, no_mean_crossings]
 
-# Make array of all 12 calculated eatures
+# Make array of 12 calculated features
 def get_features(list_values):
     tmp = []
     entropy = calculate_entropy(list_values)
@@ -65,10 +67,12 @@ def load_data(directory):
                 data_arr[i,j,k] = raw_data[j,k+1]
     return time_list, data_arr
 
-time, train_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive')
-time, train_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative')
-time, test_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive_test')
-time, test_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative_test')
+start_time = time.time()
+
+time_list, train_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive')
+time_list, train_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative')
+time_list, test_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive_test')
+time_list, test_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative_test')
 
 # Get array of shape (#of training files) x ((# of phases) * (# of DWT decomps) * (# of calcualted feature stats))
 def get_data_features(dataset, waveletname, level_val):
@@ -97,54 +101,59 @@ test_neg = get_data_features(test_data_neg, 'db2', 3)
 test = np.concatenate((test_pos, test_neg))
 
 # Make labeled target columns for training set and testing set
-train_labels_pos = np.ones((8630,1))
-train_labels_neg = np.zeros((8630,1))
+train_labels_pos = np.ones((len(train_data_neg),1))
+train_labels_neg = np.zeros((len(train_data_neg),1))
 train_labels = np.concatenate((train_labels_pos, train_labels_neg))
 
-test_labels_pos = np.ones((10,1))
-test_labels_neg = np.zeros((10,1))
+test_labels_pos = np.ones((len(test_data_pos),1))
+test_labels_neg = np.zeros((len(test_data_neg),1))
 test_labels = np.concatenate((test_labels_pos, test_labels_neg))
 
-# Perform random forest classification
-clr = RandomForestClassifier(n_estimators=2000)
-clr.fit(train, train_labels.ravel())
-train_score = clr.score(train, train_labels.ravel())
-test_score = clr.score(test, test_labels.ravel())
-# Mean accuracy of training set (should be 1.0)
-print(f'Train score for the dataset is about: {train_score}')
-# Mean accuracy of testing set (1.0 is best)
-print(f'Test Score for the dataset is about: {test_score}')
-pred = clr.predict(test)
-# Mean absolute error of testing set (lower = better)
-mae = mean_absolute_error(test_labels, pred)
-print(f'The mean absolute error for the dataset is: {mae}\n')
-# Display confusion matrix
-cm = confusion_matrix(test_labels, pred)
-sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', xticklabels=np.unique(test_labels), yticklabels=np.unique(test_labels))
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.title('Confusion Matrix')
-plt.show()
+# # Perform random forest classification
+# clr = RandomForestClassifier(n_estimators=2000)
+# clr.fit(train, train_labels.ravel())
+# train_score = clr.score(train, train_labels.ravel())
+# test_score = clr.score(test, test_labels.ravel())
+# # Mean accuracy of training set (should be 1.0)
+# print(f'Train score for the dataset is about: {train_score}')
+# # Mean accuracy of testing set (1.0 is best)
+# print(f'Test Score for the dataset is about: {test_score}')
+# pred = clr.predict(test)
+# # Mean absolute error of testing set (lower = better)
+# mae = mean_absolute_error(test_labels, pred)
+# print(f'The mean absolute error for the dataset is: {mae}\n')
+# # Display confusion matrix
+# cm = confusion_matrix(test_labels, pred)
+# sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', xticklabels=np.unique(test_labels), yticklabels=np.unique(test_labels))
+# plt.xlabel('Predicted')
+# plt.ylabel('True')
+# plt.title('Confusion Matrix')
+# plt.show()
+# # Display ROC Curve
+# fpr, tpr, thresholds = roc_curve(test_labels, pred)
+# auc = roc_auc_score(test_labels, pred)
+# plt.figure(figsize=(8,6))
+# plt.plot(fpr, tpr, label='RF ROC Curve (AUC = %0.2f)' % auc)
 
-# Perform gradient boost classification
-cls = GradientBoostingClassifier(n_estimators=2000)
-cls.fit(train, train_labels.ravel())
-train_score = cls.score(train, train_labels.ravel())
-test_score = cls.score(test, test_labels.ravel())
-print(f'Train score for the dataset is about: {train_score}')
-print(f'Test Score for the dataset is about: {test_score}')
-pred = cls.predict(test)
-mae = mean_absolute_error(test_labels, pred)
-print(f'The mean absolute error for the dataset is: {mae}\n')
-cm = confusion_matrix(test_labels, pred)
-sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', xticklabels=np.unique(test_labels), yticklabels=np.unique(test_labels))
-plt.xlabel('Predicted')
-plt.ylabel('True')
-plt.title('Confusion Matrix')
-plt.show()
+# # Perform gradient boost classification
+# cls = GradientBoostingClassifier(n_estimators=2000)
+# cls.fit(train, train_labels.ravel())
+# train_score = cls.score(train, train_labels.ravel())
+# test_score = cls.score(test, test_labels.ravel())
+# print(f'Train score for the dataset is about: {train_score}')
+# print(f'Test Score for the dataset is about: {test_score}')
+# pred = cls.predict(test)
+# mae = mean_absolute_error(test_labels, pred)
+# print(f'The mean absolute error for the dataset is: {mae}\n')
+# cm = confusion_matrix(test_labels, pred)
+# sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', xticklabels=np.unique(test_labels), yticklabels=np.unique(test_labels))
+# plt.xlabel('Predicted')
+# plt.ylabel('True')
+# plt.title('Confusion Matrix')
+# plt.show()
 
 # Perform support vector classification
-clf = svm.SVC()
+clf = svm.SVC(gamma=0.001)
 clf.fit(train, train_labels.ravel())
 train_score = clf.score(train, train_labels.ravel())
 test_score = clf.score(test, test_labels.ravel())
@@ -159,3 +168,17 @@ plt.xlabel('Predicted')
 plt.ylabel('True')
 plt.title('Confusion Matrix')
 plt.show()
+fpr, tpr, thresholds = roc_curve(test_labels, pred)
+auc = roc_auc_score(test_labels, pred)
+plt.plot(fpr, tpr, label='SVC ROC Curve (AUC = %0.2f)' % auc)
+
+# Create ROC Curve
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate (FPR)')
+plt.ylabel('True Positive Rate (TPR)')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend(loc="lower right")
+plt.show()
+
+print('--%s--' % (time.time() - start_time))
