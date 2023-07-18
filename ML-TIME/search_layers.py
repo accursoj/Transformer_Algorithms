@@ -1,8 +1,8 @@
 import tensorflow as tf
 
-from tensorflow.keras import Model, Sequential
+from keras import Model, Sequential
 
-from tensorflow.keras.layers import (Conv1D, SeparableConv1D, MaxPool1D, BatchNormalization,
+from keras.layers import (Conv1D, SeparableConv1D, MaxPool1D, BatchNormalization,
                                      AveragePooling1D, ReLU, LayerNormalization, MultiHeadAttention, 
                                      Add, Dense, Dropout, Attention, Input, Dense, Flatten, Conv1D,
                                      MaxPool1D, Embedding, GlobalAveragePooling1D, Softmax,

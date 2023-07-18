@@ -1,10 +1,12 @@
-from google.colab import drive
-drive.mount('/content/drive')
+
 
 
 import numpy as np
 import pandas as pd 
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'    # gets rid of harmless error messages
+os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/lib/cuda/'
+
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
@@ -13,17 +15,17 @@ from keras.layers import (Layer, Input, Reshape, Rescaling, Flatten, Dense, Drop
                           Activation, LayerNormalization, Embedding, MultiHeadAttention, Lambda, Add)
                           
 from keras.models import Model
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.metrics import CategoricalAccuracy
+from keras.optimizers import Adam
+from keras.metrics import CategoricalAccuracy
 import tensorflow_addons as tfa
 from tensorflow_addons.optimizers import AdamW
 from tensorflow_addons.metrics import MatthewsCorrelationCoefficient, F1Score
 from keras import backend as K
 
-from tensorflow.keras.utils import plot_model
+from keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, roc_curve, auc, matthews_corrcoef
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint
 
 from sklearn.model_selection import train_test_split
 
@@ -36,29 +38,29 @@ try: # detect TPUs
     tpu = tf.distribute.cluster_resolver.TPUClusterResolver.connect() # TPU detection
     strategy = tf.distribute.TPUStrategy(tpu)
 except ValueError: # detect GPUs
-    strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
-    #strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
+    # strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
+    strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
 
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
-signals = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals.npy", mmap_mode="r")
-signals_gts = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals_gts.npy", mmap_mode="r")
+signals = np.load("Transformer/FPL_Datasets/ML-TIME/signals.npy", mmap_mode="r")
+signals_gts = np.load("Transformer/FPL_Datasets/ML-TIME/signals_gts3.npy", mmap_mode="r")
 
 X = []
 y = []
 
 for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), position=0, leave=True):
-    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
+    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
         noise_count = 20
-    elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
-        noise_count = 10
-    elif signal_gt[16] == 1: # Load_Switch
-        noise_count = 5
-    elif signal_gt[22] == 1: # Transformer_Inrush
-        noise_count = 30
-    elif signal_gt[0] == 1: # No Fault
-        noise_count = 100
+    # elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
+    #     noise_count = 10
+    # elif signal_gt[16] == 1: # Load_Switch
+    #     noise_count = 5
+    # elif signal_gt[22] == 1: # Transformer_Inrush
+    #     noise_count = 30
+    # elif signal_gt[0] == 1: # No Fault
+    #     noise_count = 100
 
     for n in range(noise_count):
         X.append(signal)
@@ -67,7 +69,7 @@ for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), posi
 X = np.array(X)
 np.random.seed(7)
 for i in tqdm(range(X.shape[0])):
-    noise = np.random.uniform(-5.0, 5.0, (12800, 15)).astype(np.float32)
+    noise = np.random.uniform(-5.0, 5.0, (726, 3)).astype(np.float32)
     X[i] = X[i] + noise
 y = np.array(y)
 
@@ -100,6 +102,9 @@ X_test2 = tf.convert_to_tensor(X_te[(te_shape//4)*1:(te_shape//4)*2])
 X_test3 = tf.convert_to_tensor(X_te[(te_shape//4)*2:(te_shape//4)*3])
 X_test4 = tf.convert_to_tensor(X_te[(te_shape//4)*3:])
 X_test = tf.concat([X_test1, X_test2, X_test3, X_test4], axis=0)
+print(f'X_test shape: {X_test.shape}')
+print(f'y_te shape: {y_te.shape}')
+
 
 y_train = tf.convert_to_tensor(y_tr)
 y_test = tf.convert_to_tensor(y_te)
@@ -120,9 +125,9 @@ def TransformerEncoder(inputs, num_heads, head_size, dropout, units_dim):
     return outputs
 
 def build_transformer_model():
-    input_sig = Input(shape=(12800, 15))
+    input_sig = Input(shape=(726, 3))
     sig = input_sig/6065.3965
-    sig = Reshape((50, 256, 15))(sig)
+    sig = Reshape((6, 121, 3))(sig)
     sig = TimeDistributed(Flatten())(sig)
 
     sig = Dense(1024, activation="relu")(sig)
@@ -130,8 +135,8 @@ def build_transformer_model():
     sig = Dense(64, activation="relu")(sig)
     sig = Dropout(0.2)(sig)
 
-    embeddings = Embedding(input_dim=50, output_dim=64)
-    position_embed = embeddings(tf.range(start=0, limit=50, delta=1))
+    embeddings = Embedding(input_dim=6, output_dim=64)
+    position_embed = embeddings(tf.range(start=0, limit=6, delta=1))
     sig = sig + position_embed
 
     for e in range(4):
@@ -139,34 +144,35 @@ def build_transformer_model():
 
     sig = Flatten()(sig)
 
-    typ = Dense(512, activation="relu")(sig)
+    typ = Dense(256, activation="relu")(sig)
     typ = Dropout(0.2)(typ)
     typ = Dense(128, activation="relu")(typ)
     typ = Dense(32, activation="relu")(typ)
     typ = Dropout(0.2)(typ)
-    typ_output = Dense(23, activation="softmax", name="type")(typ)
+    typ_output = Dense(20, activation="softmax", name="type")(typ)
 
-    loc = Dense(512, activation="relu")(sig)
-    loc = Dropout(0.2)(loc)
-    loc = Dense(128, activation="relu")(loc)
-    loc = Dense(32, activation="relu")(loc)
-    loc = Dropout(0.2)(loc)
-    loc_output = Dense(15, activation="softmax", name="loc")(loc)
+    # loc = Dense(256, activation="relu")(sig)
+    # loc = Dropout(0.2)(loc)
+    # loc = Dense(128, activation="relu")(loc)
+    # loc = Dense(32, activation="relu")(loc)
+    # loc = Dropout(0.2)(loc)
+    # loc_output = Dense(0, activation="softmax", name="loc")(loc)
 
-    model = Model(inputs=input_sig, outputs=[typ_output, loc_output])
+    model = Model(inputs=input_sig, outputs=[typ_output]) # loc_output])
 
     model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
                   optimizer = Adam(learning_rate=0.001),
                   metrics={"type":[ 
                                     CategoricalAccuracy(name="acc"),
-                                    MatthewsCorrelationCoefficient(num_classes=23, name ="mcc"),
-                                    F1Score(num_classes=23, name='f1_score')
+                                    MatthewsCorrelationCoefficient(num_classes=20, name ="mcc"),
+                                    F1Score(num_classes=20, name='f1_score')
                                   ],
-                           "loc":[
-                                    CategoricalAccuracy(name="acc"),
-                                    MatthewsCorrelationCoefficient(num_classes=15, name ="mcc"),
-                                    F1Score(num_classes=15, name='f1_score')
-                                 ]})
+                        #    "loc":[
+                        #             CategoricalAccuracy(name="acc"),
+                        #             MatthewsCorrelationCoefficient(num_classes=15, name ="mcc"),
+                        #             F1Score(num_classes=15, name='f1_score')
+                        #          ]
+                            })
 
     model._name = "Transformer_Model"
 
@@ -176,34 +182,34 @@ def build_transformer_model():
 with strategy.scope():
     transformer_model = build_transformer_model()
 
-transformer_model.summary()
+# transformer_model.summary()
 
-transformer_model_history = transformer_model.fit(X_train,
-                                                [y_train[:,:23], y_train[:,23:]],
-                                                epochs = 100,
-                                                batch_size = 32 * strategy.num_replicas_in_sync,
-                                                validation_data = (X_test, [y_test[:,:23], y_test[:,23:]]),
-                                                validation_batch_size = 32 * strategy.num_replicas_in_sync,
-                                                verbose = 1,
-                                                callbacks = [ModelCheckpoint("cnn_attention_fault_detr_v1.h5",
-                                                                                verbose = 1,
-                                                                                monitor = "val_loss",
-                                                                                save_best_only = True,
-                                                                                save_weights_only = True,
-                                                                                mode = "min")])
+# transformer_model_history = transformer_model.fit(X_train,
+#                                                 [y_train[:,:20], y_train[:,20:]],
+#                                                 epochs = 150,
+#                                                 batch_size = 64 * strategy.num_replicas_in_sync,
+#                                                 validation_data = (X_test, [y_test[:,:20], y_test[:,20:]]),
+#                                                 validation_batch_size = 64 * strategy.num_replicas_in_sync,
+#                                                 verbose = 1,
+#                                                 callbacks = [ModelCheckpoint("cnn_attention_fault_detr_v2.h5",
+#                                                                                 verbose = 1,
+#                                                                                 monitor = "val_loss",
+#                                                                                 save_best_only = True,
+#                                                                                 save_weights_only = True,
+#                                                                                 mode = "min")])
 
-np.save("transformer_model_fault_detr_v1_history.npy", transformer_model_history.history)
-transformer_model_model_history = np.load("transformer_model_fault_detr_v1_history.npy", allow_pickle="TRUE").item()
+# np.save("Transformer/FPL_Datasets/ML-TIME/transformer_model_fault_detr_v2_history.npy", transformer_model_history.history)
+transformer_model_model_history = np.load("Transformer/FPL_Datasets/ML-TIME/transformer_model_fault_detr_v1_history.npy", allow_pickle="TRUE").item()
 
-transformer_model.load_weights("transformer_model_fault_detr_v1.h5")
+transformer_model.load_weights("Transformer/FPL_Datasets/ML-TIME/cnn_attention_fault_detr_v1.h5")
 
-test_metrics = transformer_model.evaluate(X_test, [y_test[:,:23], y_test[:,23:]])
+test_metrics = transformer_model.evaluate(X_test, [y_test[:,:20], y_test[:,20:]])
 test_metrics
 
-type_names =["No_Fault", "AG", "BG", "CG", "AB", "BC", "AC", "ABG", "BCG", "ACG", "ABC", "ABCG", "HIFA", "HIFB", "HIFC",
-                   "Capacitor_Switch", "Linear_Load_Switch", "Non_Linear_Load_Switch", "Transformer_Switch",
-                 "DG_Switch", "Feeder_Switch", "Insulator_Leakage", "Transformer_Inrush"]
-loc_names = ["No Loc", "Loc 1", "Loc 2", "Loc 3", "Loc 4", "Loc 5", "Loc 6", "Loc 7", "Loc 8", "Loc 9", "Loc 10", "Loc 11", "Loc 12", "Loc 13", "Loc 14"]
+type_names =["exciting Class1","exciting Class2","exciting Class3","exciting Class4","exciting Class5", "exciting Class6","exciting Class7","exciting Class8","exciting Class9","exciting Class10", "exciting Class11",
+                "Capacitor_Switch", "external_fault","ferroresonance",  
+                "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
+#loc_names = ["No Loc", "Loc 1", "Loc 2", "Loc 3", "Loc 4", "Loc 5", "Loc 6", "Loc 7", "Loc 8", "Loc 9", "Loc 10", "Loc 11", "Loc 12", "Loc 13", "Loc 14"]
 
 
 plt.rcParams.update({'legend.fontsize': 14,
@@ -215,15 +221,15 @@ plt.rcParams.update({'legend.fontsize': 14,
 def test_eval(model, history):
 
     print("\nTesting ")
-    train_curves(history, model._name.replace("_"," "))
+    # train_curves(history, model._name.replace("_"," "))
     
     pred_probas = model.predict(X_test, verbose = 1)
 
-    y_type = np.argmax(y_test[:,0:23], axis = 1)
-    y_loc = np.argmax(y_test[:,23:], axis = 1)
+    y_type = np.argmax(y_test, axis = 1)
+    # y_loc = np.argmax(y_test[:,20:], axis = 1)
 
-    pred_type = np.argmax(pred_probas[0], axis = 1)
-    pred_loc = np.argmax(pred_probas[1], axis = 1)
+    pred_type = np.argmax(pred_probas, axis = 1)
+    # pred_loc = np.argmax(pred_probas[1], axis = 1)
 
     ###################################################################################################################
 
@@ -236,23 +242,25 @@ def test_eval(model, history):
     test_accuracy = plot_confusion_matrix(cm = conf_matrix, normalize = False,  target_names = type_names, title = model._name.replace("_"," ") + " Fault Type")
 
     print("\nROC Curve: Fault Type")
-    plot_roc(y_test[:,:23], pred_probas[0], class_names = type_names, title = model._name.replace("_"," ") +" Fault Type")
+    plot_roc(y_test, pred_probas, class_names = type_names, title = model._name.replace("_"," ") +" Fault Type")
 
     ###################################################################################################################
 
-    print("\nClassification Report: Fault Location ")
-    print(classification_report(y_loc, pred_loc, target_names = loc_names, digits=6))
-    print("Matthews Correlation Coefficient: ", matthews_corrcoef(y_loc, pred_loc))
+    # print("\nClassification Report: Fault Location ")
+    # print(classification_report(y_loc, pred_loc, target_names = loc_names, digits=6))
+    # print("Matthews Correlation Coefficient: ", matthews_corrcoef(y_loc, pred_loc))
 
-    print("\nConfusion Matrix: Fault Location ")
-    conf_matrix = confusion_matrix(y_loc, pred_loc)
-    test_accuracy = plot_confusion_matrix(cm = conf_matrix, normalize = False,  target_names = loc_names, title = model._name.replace("_"," ") + " Fault Location")
+    # print("\nConfusion Matrix: Fault Location ")
+    # conf_matrix = confusion_matrix(y_loc, pred_loc)
+    # test_accuracy = plot_confusion_matrix(cm = conf_matrix, normalize = False,  target_names = loc_names, title = model._name.replace("_"," ") + " Fault Location")
 
-    print("\nROC Curve: Fault Location")
-    plot_roc(y_test[:,23:], pred_probas[1], class_names = loc_names, title = model._name.replace("_"," ") +" Fault Location")
+    # print("\nROC Curve: Fault Location")
+    # plot_roc(y_test[:,23:], pred_probas[1], class_names = loc_names, title = model._name.replace("_"," ") +" Fault Location")
 
 
-#from tensorflow.python.ops.numpy_ops import np_config
-#np_config.enable_numpy_behavior()
+from tensorflow.python.ops.numpy_ops import np_config
+np_config.enable_numpy_behavior()
 
-test_eval(transformer_model, transformer_model_history)
+# print(transformer_model_model_history.keys())
+
+test_eval(transformer_model, transformer_model_model_history)

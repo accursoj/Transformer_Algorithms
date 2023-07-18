@@ -7,12 +7,12 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.metrics import CategoricalAccuracy
-from tensorflow.keras import backend as K
+from keras.optimizers import Adam
+from keras.metrics import CategoricalAccuracy
+from keras import backend as K
 
-from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import (Input, Reshape, Rescaling, 
+from keras import Model, Sequential
+from keras.layers import (Input, Reshape, Rescaling, 
                                     TimeDistributed, MaxPool1D, BatchNormalization, 
                                     Embedding, Dense, Dropout,
                                     Flatten, Softmax)
@@ -22,11 +22,11 @@ from search_layers import (regularizer, kernel_init,
                             Densely, Conv, SepConv, DilConv, Identity)
 
 
-from tensorflow.keras.utils import plot_model
+from keras.utils import plot_model
 import imageio
 
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint
 
 from sklearn.model_selection import train_test_split
 
@@ -34,42 +34,41 @@ import gc
 from collections import namedtuple
 
 import sys
-from graphviz import Digraph
+# from graphviz import Digraph
 
 from plot_utils import train_curves, plot
 
-from dl_eval_plot_fns import plot_confusion_matrix, plot_roc, train_curves
+# from dl_eval_plot_fns import plot_confusion_matrix, plot_roc, train_curves
 
 
 try: # detect TPUs
     tpu = tf.distribute.cluster_resolver.TPUClusterResolver.connect() # TPU detection
     strategy = tf.distribute.TPUStrategy(tpu)
 except ValueError: # detect GPUs
-    strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
-    #strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
+    # strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
+    strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
 
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
 # signals = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals.npy", mmap_mode="r")
 # signals_gts = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals_gts.npy", mmap_mode="r")
-signals = np.load("/Users/raulmendy/Desktop/FPL/Datasets/Differential-Transformer-Architecture-Search-for-Distribution-System-Fault-Detection/signals.npy",mmap_mode="r")
-signals_gts = np.load("/Users/raulmendy/Desktop/FPL/Datasets/Differential-Transformer-Architecture-Search-for-Distribution-System-Fault-Detection/signals_gts3.npy",mmap_mode="r")
-
+signals = np.load("/home/isense/Transformer/FPL_Datasets/ML-TIME/signals.npy", mmap_mode="r",)
+signals_gts = np.load("/home/isense/Transformer/FPL_Datasets/ML-TIME/signals_gts3.npy", mmap_mode="r")
 X = []
 y = []
 
 for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), position=0, leave=True):
-    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19, 20]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
+    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
         noise_count = 20
-    elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
-        noise_count = 10
-    elif signal_gt[16] == 1: # Load_Switch
-        noise_count = 5
-    elif signal_gt[22] == 1: # Transformer_Inrush
-        noise_count = 30
-    elif signal_gt[0] == 1: # No Fault
-        noise_count = 100
+    # elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
+    #     noise_count = 10
+    # elif signal_gt[16] == 1: # Load_Switch
+    #     noise_count = 5
+    # elif signal_gt[22] == 1: # Transformer_Inrush
+    #     noise_count = 30
+    # elif signal_gt[0] == 1: # No Fault
+    #     noise_count = 100
 
     for n in range(noise_count):
         X.append(signal)
@@ -78,7 +77,7 @@ for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), posi
 X = np.array(X)
 np.random.seed(7)
 for i in tqdm(range(X.shape[0])):
-    noise = np.random.uniform(-5.0, 5.0, (12800, 15)).astype(np.float32)
+    noise = np.random.uniform(-5.0, 5.0, (726, 3)).astype(np.float32)
     X[i] = X[i] + noise
 y = np.array(y)
 
@@ -97,7 +96,7 @@ print(X_te.shape, y_te.shape)
 
 cfg = {
     # general setting
-    "batch_size": 256,
+    "batch_size": 121,
     "init_channels": 64,
     "layers": 4,
     "num_typ_classes": 23,
@@ -138,8 +137,8 @@ X_test = tf.concat([X_test1, X_test2, X_test3, X_test4], axis=0)
 y_train = tf.convert_to_tensor(y_tr)
 y_test = tf.convert_to_tensor(y_te)
 
-train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train[:,:23], y_train[:,23:]))
-test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test[:,:23], y_test[:,23:]))
+train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train[:,:20])) #  y_train[:,20:]))
+test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test[:,:20])) #  y_test[:,20:]))
 
 train_dataset = train_dataset.shuffle(4000).batch(cfg["batch_size"], drop_remainder=True)#.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.batch(cfg["batch_size"], drop_remainder=True)#.prefetch(tf.data.experimental.AUTOTUNE)
@@ -339,12 +338,12 @@ class SearchNetArch(object):
 
         # define model
 
-        inputs = Input(shape=(12800, 15))
+        inputs = Input(shape=(726, 3))
         sig = Rescaling(scale=1.0/6065.3467)(inputs)
-        sig = Reshape((50, 256, 15))(sig)
+        sig = Reshape((6, 121, 3))(sig)
         sig = TimeDistributed(Flatten())(sig)
 
-        sig = Dense(512, activation="relu")(sig)
+        sig = Dense(1024, activation="relu")(sig)
         sig = Dropout(0.2)(sig)
         sig = Dense(64, activation="relu")(sig)
         sig = Dropout(0.2)(sig)
@@ -363,8 +362,8 @@ class SearchNetArch(object):
         # betas_normal_weights = SplitSoftmax(
         #     range(2, 2 + self.steps), name='BetasNormalSoftmax')(betas_normal)
 
-        embeddings = Embedding(input_dim=50, output_dim=64)
-        position_embed = embeddings(tf.range(start=0, limit=50, delta=1))
+        embeddings = Embedding(input_dim=6, output_dim=64)
+        position_embed = embeddings(tf.range(start=0, limit=6, delta=1))
         sig = sig + position_embed
 
         s0 = s1 = sig
@@ -394,7 +393,7 @@ class SearchNetArch(object):
         sig = Dropout(0.1)(sig)
         sig = Flatten()(sig)
 
-        typ = Dense(512, activation="relu")(sig)
+        typ = Dense(256, activation="relu")(sig)
         typ = Dropout(0.2)(typ)
         typ = Dense(128, activation="relu")(typ)
         typ = Dense(32, activation="relu")(typ)
@@ -402,13 +401,13 @@ class SearchNetArch(object):
         typ_output = Dense(23, activation="softmax", name="type", kernel_initializer=kernel_init(),
                        kernel_regularizer=regularizer(wd))(typ)
 
-        loc = Dense(512, activation="relu")(sig)
-        loc = Dropout(0.2)(loc)
-        loc = Dense(128, activation="relu")(loc)
-        loc = Dense(32, activation="relu")(loc)
-        loc = Dropout(0.2)(loc)
-        loc_output = Dense(15, activation="softmax", name="loc", kernel_initializer=kernel_init(),
-                       kernel_regularizer=regularizer(wd))(loc)
+        # loc = Dense(512, activation="relu")(sig)
+        # loc = Dropout(0.2)(loc)
+        # loc = Dense(128, activation="relu")(loc)
+        # loc = Dense(32, activation="relu")(loc)
+        # loc = Dropout(0.2)(loc)
+        # loc_output = Dense(15, activation="softmax", name="loc", kernel_initializer=kernel_init(),
+        #                kernel_regularizer=regularizer(wd))(loc)
 
         return Model(
             (inputs, 
@@ -417,7 +416,7 @@ class SearchNetArch(object):
             #  betas_normal
             #  betas_reduce
              ),
-            outputs=[typ_output, loc_output], name=self.name)
+            outputs=[typ_output], name=self.name) # loc_output], name=self.name)
 
     def get_genotype(self):
         """get genotype"""
@@ -544,22 +543,22 @@ with strategy.scope():
         return total_loss
 
     # define training step function for arch_parameters
-    def train_step_arch(inputs, typ_labels, loc_labels):
+    def train_step_arch(inputs, typ_labels): # , loc_labels):
         with tf.GradientTape() as tape:
-            typ_output, loc_output = sna.model((inputs, *sna.arch_parameters), training=True)
+            typ_output = sna.model((inputs, *sna.arch_parameters), training=True)
 
             losses = {}
             losses['reg'] = cfg['arch_weight_decay'] * tf.add_n(
                 [tf.reduce_sum(p**2) for p in sna.arch_parameters])
             losses['tce'] = criterion(typ_labels, typ_output)
-            losses['lce'] = criterion(loc_labels, loc_output)
+            # losses['lce'] = criterion(loc_labels, loc_output)
             loss_values = [l for l in losses.values()]
             total_loss = tf.add_n(loss_values)
 
         grads = tape.gradient(loss_values, sna.arch_parameters)
         optimizer_arch.apply_gradients(zip(grads, sna.arch_parameters))
         typ_val_accuracy.update_state(typ_labels, typ_output)
-        loc_val_accuracy.update_state(loc_labels, loc_output)
+        # loc_val_accuracy.update_state(loc_labels, loc_output)
 
         return total_loss
 
@@ -569,8 +568,8 @@ with strategy.scope():
     val_losses = [] 
     train_typ_accs = [] 
     val_typ_accs = [] 
-    train_loc_accs = [] 
-    val_loc_accs = [] 
+    # train_loc_accs = [] 
+    # val_loc_accs = [] 
 
     train_loss = 0
     val_loss = 10
@@ -586,8 +585,8 @@ with strategy.scope():
 
         total_loss = 0.0
         num_batches = 0
-        for inputs, typ_labels, loc_labels in tqdm(train_dataset):
-            total_loss += distributed_train_step(inputs, typ_labels, loc_labels)
+        for inputs, typ_labels in tqdm(train_dataset):
+            total_loss += distributed_train_step(inputs, typ_labels)
             num_batches += 1
         train_loss = total_loss / num_batches
 
@@ -597,15 +596,16 @@ with strategy.scope():
         template = ("Epoch {}, Loss: {:.4f}, Type Accuracy: {:.2f}, Location Accuracy: {:.2f}, Val Loss: {:.4f}, Val Type Accuracy: {:.2f}, Val Location Accuracy: {:.2f}\n")
         print(template.format(epoch+1, train_loss,
                             typ_train_accuracy.result()*100,
-                            loc_train_accuracy.result()*100,
+                            # loc_train_accuracy.result()*100,
                             val_loss,
                             typ_val_accuracy.result()*100,
-                            loc_val_accuracy.result()*100))
+                            # loc_val_accuracy.result()*100)
+                            ))
 
         train_typ_accs.append(typ_train_accuracy.result())
         val_typ_accs.append(typ_val_accuracy.result())
-        train_loc_accs.append(loc_train_accuracy.result())
-        val_loc_accs.append(loc_val_accuracy.result())
+        # train_loc_accs.append(loc_train_accuracy.result())
+        # val_loc_accs.append(loc_val_accuracy.result())
 
         typ_train_accuracy.reset_states()
         loc_train_accuracy.reset_states()
@@ -626,8 +626,8 @@ search_history = {
     "val_loss" : np.array(val_losses),
     "train_typ_accs" : np.array(train_typ_accs),
     "val_typ_accs" : np.array(val_typ_accs),
-    "train_loc_accs" : np.array(train_loc_accs),
-    "val_loc_accs" : np.array(val_loc_accs)
+    # "train_loc_accs" : np.array(train_loc_accs),
+    # "val_loc_accs" : np.array(val_loc_accs)
 }
 
 np.save("pc_darts_search_history_v2.npy", search_history)
