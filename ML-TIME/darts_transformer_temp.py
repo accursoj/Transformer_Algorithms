@@ -54,43 +54,38 @@ except ValueError: # detect GPUs
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
-# signals = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals.npy", mmap_mode="r")
-# signals_gts = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals_gts.npy", mmap_mode="r")
-signals = np.load("FPL_Datasets/ML-TIME/signals.npy", mmap_mode="r",)
-signals_gts = np.load("FPL_Datasets/ML-TIME/signals_gts3.npy", mmap_mode="r")
-X = []
-y = []
+# # signals = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals.npy", mmap_mode="r")
+# # signals_gts = np.load("/content/drive/MyDrive/DS_Fault_Detection/Data/signals_gts.npy", mmap_mode="r")
+# signals = np.load("FPL_Datasets/ML-TIME/signals_full.npy")
+# signals_gts = np.load("FPL_Datasets/ML-TIME/signals_gts3_full.npy")
+# print(signals.shape)
+# print(signals_gts.shape)
 
-for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), position=0, leave=True):
-    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
-        noise_count = 20
-    # elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
-    #     noise_count = 10
-    # elif signal_gt[16] == 1: # Load_Switch
-    #     noise_count = 5
-    # elif signal_gt[22] == 1: # Transformer_Inrush
-    #     noise_count = 30
-    # elif signal_gt[0] == 1: # No Fault
-    #     noise_count = 100
+# X = []
+# y = []
 
-    for n in range(noise_count):
-        X.append(signal)
-        y.append(signal_gt)
+# for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), position=0, leave=True):
+#     if any(signal_gt[[x for x in range(1,46)]]): 
+#         noise_count = 3
+
+#     for n in range(noise_count):
+#         X.append(signal)
+#         y.append(signal_gt)
         
-X = np.array(X)
-np.random.seed(7)
-for i in tqdm(range(X.shape[0])):
-    noise = np.random.uniform(-5.0, 5.0, (726, 3)).astype(np.float32)
-    X[i] = X[i] + noise
-y = np.array(y)
+# X = np.array(X)
+# np.random.seed(7)
+# for i in tqdm(range(X.shape[0])):
+#     noise = np.random.uniform(-5.0, 5.0, (726, 3)).astype(np.float32)
+#     X[i] = X[i] + noise
+# y = np.array(y)
 
-np.save("FPL_Datasets/ML-TIME/darts_X.npy", X)
-np.save("FPL_Datasets/ML-TIME/darts_y.npy", y)
-del X, y, signals, signals_gts
-gc.collect()
+# np.save("FPL_Datasets/ML-TIME/darts_X_full.npy", X)
+# np.save("FPL_Datasets/ML-TIME/darts_y_full.npy", y)
+# del X, y, signals, signals_gts
+# gc.collect()
 
-X = np.load("FPL_Datasets/ML-TIME/darts_X.npy", mmap_mode="r")
-y = np.load("FPL_Datasets/ML-TIME/darts_y.npy", mmap_mode="r")
+X = np.load("FPL_Datasets/ML-TIME/darts_X_full.npy", mmap_mode="r")
+y = np.load("FPL_Datasets/ML-TIME/darts_y_full.npy", mmap_mode="r")
 
 X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
 print(X_tr.shape, y_tr.shape)
@@ -102,12 +97,12 @@ cfg = {
     "batch_size": 121,
     "init_channels": 64,
     "layers": 4,
-    "num_typ_classes": 23,
-    "num_loc_classes": 15,
+    "num_typ_classes": 46,
+    # "num_loc_classes": 15,
     "sub_name": 'darts_search',
 
     # training setting
-    "epoch": 500,
+    "epoch": 100,
     "start_search_epoch": 15,
     "init_lr": 0.001,
     "momentum": 0.9,
@@ -140,8 +135,10 @@ X_test = tf.concat([X_test1, X_test2, X_test3, X_test4], axis=0)
 y_train = tf.convert_to_tensor(y_tr)
 y_test = tf.convert_to_tensor(y_te)
 
-train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train[:,:20])) #  y_train[:,20:]))
-test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test[:,:20])) #  y_test[:,20:]))
+# train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train[:,:20])) #  y_train[:,20:]))
+# test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test[:,:20])) #  y_test[:,20:]))
+train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train[:,:46]))
+test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test[:,:46]))
 
 train_dataset = train_dataset.shuffle(4000).batch(cfg["batch_size"], drop_remainder=True)#.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.batch(cfg["batch_size"], drop_remainder=True)#.prefetch(tf.data.experimental.AUTOTUNE)
@@ -401,7 +398,7 @@ class SearchNetArch(object):
         typ = Dense(128, activation="relu")(typ)
         typ = Dense(32, activation="relu")(typ)
         typ = Dropout(0.2)(typ)
-        typ_output = Dense(23, activation="softmax", name="type", kernel_initializer=kernel_init(),
+        typ_output = Dense(46, activation="softmax", name="type", kernel_initializer=kernel_init(),
                        kernel_regularizer=regularizer(wd))(typ)
 
         # loc = Dense(512, activation="relu")(sig)
@@ -481,7 +478,6 @@ plot_model(sna.model, expand_nested=True, show_shapes=True)
 
 
 with strategy.scope(): 
-
     train_dataset = strategy.experimental_distribute_dataset(train_dataset)
     test_dataset = strategy.experimental_distribute_dataset(test_dataset)
 
@@ -497,43 +493,33 @@ with strategy.scope():
         return cross_entropy_loss
 
     # define optimizer
-    optimizer = tf.keras.optimizers.Adam(learning_rate=cfg['init_lr'])
-    optimizer_arch = tf.keras.optimizers.Adam(learning_rate=cfg['arch_learning_rate'])
+    optimizer = Adam(learning_rate=cfg['init_lr'])
+    optimizer_arch = Adam(learning_rate=cfg['arch_learning_rate'])
 
     # define losses function
     criterion = CrossEntropyLoss()
 
-    typ_train_accuracy = tf.keras.metrics.CategoricalAccuracy(
+    typ_train_accuracy = CategoricalAccuracy(
         name='typ_train_accuracy')
-    loc_train_accuracy = tf.keras.metrics.CategoricalAccuracy(
-        name='loc_train_accuracy')
-    typ_val_accuracy = tf.keras.metrics.CategoricalAccuracy(
+    # loc_train_accuracy = tf.keras.metrics.CategoricalAccuracy(
+        # name='loc_train_accuracy')
+    typ_val_accuracy = CategoricalAccuracy(
         name='typ_val_accuracy')
-    loc_val_accuracy = tf.keras.metrics.CategoricalAccuracy(
-        name='loc_val_accuracy')
+    # loc_val_accuracy = tf.keras.metrics.CategoricalAccuracy(
+        # name='loc_val_accuracy')
 
 
 
-with strategy.scope():   
-    @tf.function
-    def distributed_train_step(inputs, typ_labels, loc_labels):
-        per_replica_total_loss = strategy.run(train_step,args=(inputs, typ_labels, loc_labels))
-        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_total_loss, axis=None)
-
-    @tf.function
-    def distributed_train_step_arch(inputs, typ_labels, loc_labels):
-        per_replica_losses = strategy.run(train_step_arch, args=(inputs, typ_labels, loc_labels))
-        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
-
-    # define training step function for model
-    def train_step(inputs, typ_labels, loc_labels):
+with strategy.scope():
+        # define training step function for model
+    def train_step(inputs, typ_labels): #, loc_labels):
         with tf.GradientTape() as tape:
-            typ_output, loc_output = sna.model((inputs, *sna.arch_parameters), training=True)
+            typ_output = sna.model((inputs, *sna.arch_parameters), training=True)
 
             losses = {}
             losses['reg'] = tf.reduce_sum(sna.model.losses)
             losses['tce'] = criterion(typ_labels, typ_output)
-            losses['lce'] = criterion(loc_labels, loc_output)
+            # losses['lce'] = criterion(loc_labels, loc_output)
             loss_values = [l for l in losses.values()]
             total_loss = tf.add_n(loss_values)
 
@@ -541,7 +527,7 @@ with strategy.scope():
         # grads = [(tf.clip_by_norm(grad, cfg['grad_clip'])) for grad in grads]
         optimizer.apply_gradients(zip(grads, sna.model.trainable_variables))
         typ_train_accuracy.update_state(typ_labels, typ_output)
-        loc_train_accuracy.update_state(loc_labels, loc_output)
+        # loc_train_accuracy.update_state(loc_labels, loc_output)
 
         return total_loss
 
@@ -564,6 +550,18 @@ with strategy.scope():
         # loc_val_accuracy.update_state(loc_labels, loc_output)
 
         return total_loss
+       
+    @tf.function
+    def distributed_train_step(inputs, typ_labels): #, loc_labels):
+        per_replica_total_loss = strategy.run(train_step, args=(inputs, typ_labels)) #, loc_labels))
+        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_total_loss, axis=None)
+
+    @tf.function
+    def distributed_train_step_arch(inputs, typ_labels): #, loc_labels):
+        per_replica_losses = strategy.run(train_step_arch, args=(inputs, typ_labels)) #, loc_labels))
+        return strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_losses, axis=None)
+
+
 
 
 with strategy.scope(): 
@@ -581,8 +579,8 @@ with strategy.scope():
         if epoch >= 5:
             val_total_loss = 0.0
             val_num_batches = 0
-            for inputs_val, typ_labels_val, loc_labels_val in tqdm(test_dataset):
-                val_total_loss  += distributed_train_step_arch(inputs_val, typ_labels_val, loc_labels_val)
+            for inputs_val, typ_labels_val in tqdm(test_dataset): #, loc_labels_val in tqdm(test_dataset):
+                val_total_loss  += distributed_train_step_arch(inputs_val, typ_labels_val) #, loc_labels_val)
                 val_num_batches += 1
             val_loss = val_total_loss / val_num_batches
 
@@ -596,7 +594,7 @@ with strategy.scope():
         train_losses.append(train_loss)
         val_losses.append(val_loss)
 
-        template = ("Epoch {}, Loss: {:.4f}, Type Accuracy: {:.2f}, Location Accuracy: {:.2f}, Val Loss: {:.4f}, Val Type Accuracy: {:.2f}, Val Location Accuracy: {:.2f}\n")
+        template = ("Epoch {}, Loss: {:.4f}, Type Accuracy: {:.2f}, Val Loss: {:.4f}, Val Type Accuracy: {:.2f}\n")
         print(template.format(epoch+1, train_loss,
                             typ_train_accuracy.result()*100,
                             # loc_train_accuracy.result()*100,
@@ -611,16 +609,16 @@ with strategy.scope():
         # val_loc_accs.append(loc_val_accuracy.result())
 
         typ_train_accuracy.reset_states()
-        loc_train_accuracy.reset_states()
+        # loc_train_accuracy.reset_states()
         typ_val_accuracy.reset_states()
-        loc_val_accuracy.reset_states()
+        # loc_val_accuracy.reset_states()
 
-        if epoch >= 5:
-            genotype = sna.get_genotype()
-            print(f"search arch: {genotype}\n")
-            f = open('darts_search_arch_genotype_v2.py', 'a')
-            f.write(f"\n{cfg['sub_name']}_{epoch} = {genotype}\n")
-            f.close()
+        # if epoch >= 5:
+        #     genotype = sna.get_genotype()
+        #     print(f"search arch: {genotype}\n")
+        #     f = open('darts_search_arch_genotype_v2.py', 'a')
+        #     f.write(f"\n{cfg['sub_name']}_{epoch} = {genotype}\n")
+        #     f.close()
 
 
 
