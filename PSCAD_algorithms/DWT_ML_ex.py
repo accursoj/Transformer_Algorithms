@@ -13,6 +13,7 @@ from sklearn import svm
 import seaborn as sns
 import scipy
 import pandas as pd
+import joblib
 
 def calculate_entropy(list_values):
     counter_values = Counter(list_values).most_common()
@@ -69,10 +70,10 @@ def load_data(directory):
 
 start_time = time.time()
 
-time_list, train_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive')
-time_list, train_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative')
-time_list, test_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/positive_test')
-time_list, test_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/datasets/negative_test')
+time_list, train_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_datasets/positive')
+time_list, train_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_datasets/negative')
+time_list, test_data_pos = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_datasets/positive_test')
+time_list, test_data_neg = load_data('/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_datasets/negative_test')
 
 # Get array of shape (#of training files) x ((# of phases) * (# of DWT decomps) * (# of calcualted feature stats))
 def get_data_features(dataset, waveletname, level_val):
@@ -99,6 +100,8 @@ train = np.concatenate((train_pos, train_neg))
 test_pos = get_data_features(test_data_pos, 'db2', 3)
 test_neg = get_data_features(test_data_neg, 'db2', 3)
 test = np.concatenate((test_pos, test_neg))
+# Save X_test
+joblib.dump(test, '/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_algorithms/test_obj.sav')
 
 # Make labeled target columns for training set and testing set
 train_labels_pos = np.ones((len(train_data_neg),1))
@@ -108,6 +111,8 @@ train_labels = np.concatenate((train_labels_pos, train_labels_neg))
 test_labels_pos = np.ones((len(test_data_pos),1))
 test_labels_neg = np.zeros((len(test_data_neg),1))
 test_labels = np.concatenate((test_labels_pos, test_labels_neg))
+# Save y_test
+joblib.dump(test_labels, '/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_algorithms/test_labels__obj.sav')
 
 # Perform support vector classification
 clf = svm.SVC(gamma=0.001)
@@ -119,6 +124,12 @@ print(f'Test Score for the dataset is about: {test_score}')
 pred = clf.predict(test)
 mae = mean_absolute_error(test_labels, pred)
 print(f'The mean absolute error for the dataset is: {mae}\n')
+
+# Save trained model to local disk
+model_filename = '/Users/josephaccurso/REU_git_repo/FPL_Datasets/PSCAD_algorithms/DWT_ML_multi_model.sav'
+joblib.dump(clf, model_filename)
+
+# Create Confusion Matrix
 cm = confusion_matrix(test_labels, pred)
 sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', xticklabels=np.unique(test_labels), yticklabels=np.unique(test_labels))
 plt.xlabel('Predicted')
