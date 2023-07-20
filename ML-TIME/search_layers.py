@@ -85,7 +85,7 @@ class MultiHeadDecoderAttention(tf.keras.layers.Layer):
             layer.build(value_shape)
             self.layersV.append(Sequential([layer, Dropout(0.2)]))
 
-        self.attention = Attention(use_scale=False, causal=True)
+        self.attention = Attention(use_scale=False) #, causal=True)
 
         self.out = Dense(d_model, activation=None, use_bias=False,
                             kernel_initializer=kernel_init(),
@@ -103,7 +103,7 @@ class MultiHeadDecoderAttention(tf.keras.layers.Layer):
         v = [layer(value) for layer in self.layersV]
 
         # Head is in multi-head, just like the paper
-        head = [self.attention([q[i], k[i], v[i]]) for i in range(self.h)]
+        head = [self.attention([q[i], k[i], v[i]], use_causal_mask=True) for i in range(self.h)]
 
         out = self.out(tf.concat(head, -1))
         return out
