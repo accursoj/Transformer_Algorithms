@@ -44,15 +44,20 @@ except ValueError: # detect GPUs
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
-signals = np.load("Transformer/FPL_Datasets/ML-TIME/signals.npy", mmap_mode="r")
-signals_gts = np.load("Transformer/FPL_Datasets/ML-TIME/signals_gts3.npy", mmap_mode="r")
+signals = np.load("FPL_Datasets/ML-TIME/signals.npy", mmap_mode="r")
+signals_gts = np.load("FPL_Datasets/ML-TIME/signals_gts3.npy", mmap_mode="r")
 
 X = []
 y = []
 
+# type_names =["exciting Class1","exciting Class2","exciting Class3","exciting Class4","exciting Class5","exciting Class6","exciting Class7","exciting Class8","exciting Class9","exciting Class10","exciting Class11", 
+#                 "Capacitor_Switch","external_fault","ferroresonance",  
+#                 "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
+
 for signal, signal_gt in tqdm(zip(signals.astype(np.float32), signals_gts), position=0, leave=True):
-    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17, 18, 19]]): # LG, LL, LLG, LLL, LLLG, HIF, Non_Linear_Load_Switch
+    if any(signal_gt[[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14, 15, 16, 17, 18, 19]]):
         noise_count = 20
+    # elif 12 13
     # elif any(signal_gt[[15, 21]]):  # Capacitor_Switch, Insulator_Leakage
     #     noise_count = 10
     # elif signal_gt[16] == 1: # Load_Switch
@@ -73,13 +78,13 @@ for i in tqdm(range(X.shape[0])):
     X[i] = X[i] + noise
 y = np.array(y)
 
-np.save("X.npy", X)
-np.save("y.npy", y)
+np.save("FPL_Datasets/ML-TIME/vanilla_X.npy", X)
+np.save("FPL_Datasets/ML-TIME/vanilla_y.npy", y)
 del X, y, signals, signals_gts
 gc.collect()
 
-X = np.load("X.npy", mmap_mode="r")
-y = np.load("y.npy", mmap_mode="r")
+X = np.load("FPL_Datasets/ML-TIME/vanilla_X.npy", mmap_mode="r")
+y = np.load("FPL_Datasets/ML-TIME/vanilla_y.npy", mmap_mode="r")
 
 X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
 print(X_tr.shape, y_tr.shape)
@@ -182,32 +187,32 @@ def build_transformer_model():
 with strategy.scope():
     transformer_model = build_transformer_model()
 
-# transformer_model.summary()
+transformer_model.summary()
 
-# transformer_model_history = transformer_model.fit(X_train,
-#                                                 [y_train[:,:20], y_train[:,20:]],
-#                                                 epochs = 150,
-#                                                 batch_size = 64 * strategy.num_replicas_in_sync,
-#                                                 validation_data = (X_test, [y_test[:,:20], y_test[:,20:]]),
-#                                                 validation_batch_size = 64 * strategy.num_replicas_in_sync,
-#                                                 verbose = 1,
-#                                                 callbacks = [ModelCheckpoint("cnn_attention_fault_detr_v2.h5",
-#                                                                                 verbose = 1,
-#                                                                                 monitor = "val_loss",
-#                                                                                 save_best_only = True,
-#                                                                                 save_weights_only = True,
-#                                                                                 mode = "min")])
+transformer_model_history = transformer_model.fit(X_train,
+                                                [y_train[:,:20], y_train[:,20:]],
+                                                epochs = 150,
+                                                batch_size = 64 * strategy.num_replicas_in_sync,
+                                                validation_data = (X_test, [y_test[:,:20], y_test[:,20:]]),
+                                                validation_batch_size = 64 * strategy.num_replicas_in_sync,
+                                                verbose = 1,
+                                                callbacks = [ModelCheckpoint("FPL_Datasets/ML-TIME/cnn_attention_fault_detr_v2.h5",
+                                                                                verbose = 1,
+                                                                                monitor = "val_loss",
+                                                                                save_best_only = True,
+                                                                                save_weights_only = True,
+                                                                                mode = "min")])
 
-# np.save("Transformer/FPL_Datasets/ML-TIME/transformer_model_fault_detr_v2_history.npy", transformer_model_history.history)
-transformer_model_model_history = np.load("Transformer/FPL_Datasets/ML-TIME/transformer_model_fault_detr_v1_history.npy", allow_pickle="TRUE").item()
+np.save("FPL_Datasets/ML-TIME/transformer_model_fault_detr_v2_history.npy", transformer_model_history.history)
+transformer_model_model_history = np.load("FPL_Datasets/ML-TIME/transformer_model_fault_detr_v2_history.npy", allow_pickle="TRUE").item()
 
-transformer_model.load_weights("Transformer/FPL_Datasets/ML-TIME/cnn_attention_fault_detr_v1.h5")
+transformer_model.load_weights("FPL_Datasets/ML-TIME/cnn_attention_fault_detr_v2.h5")
 
 test_metrics = transformer_model.evaluate(X_test, [y_test[:,:20], y_test[:,20:]])
 test_metrics
 
-type_names =["exciting Class1","exciting Class2","exciting Class3","exciting Class4","exciting Class5", "exciting Class6","exciting Class7","exciting Class8","exciting Class9","exciting Class10", "exciting Class11",
-                "Capacitor_Switch", "external_fault","ferroresonance",  
+type_names =["exciting Class1","exciting Class2","exciting Class3","exciting Class4","exciting Class5","exciting Class6","exciting Class7","exciting Class8","exciting Class9","exciting Class10","exciting Class11", 
+                "Capacitor_Switch","external_fault","ferroresonance",  
                 "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
 #loc_names = ["No Loc", "Loc 1", "Loc 2", "Loc 3", "Loc 4", "Loc 5", "Loc 6", "Loc 7", "Loc 8", "Loc 9", "Loc 10", "Loc 11", "Loc 12", "Loc 13", "Loc 14"]
 
