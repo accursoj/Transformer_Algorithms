@@ -39,7 +39,7 @@ print("Mean Absolute Error:", mean_abs)
 # #Extrapolating Regression line
 fit = np.polyfit(x_train, y_predict, 4)
 line = np.poly1d(fit)
-new_time_points = np.arange(x_train[len(x_train)-1], x_train[len(x_train)-1] + 5184000, 900, int)
+new_time_points = np.arange(x_train[len(x_train)-1], x_train[len(x_train)-1] + 7776000, 900, int)
 extrapolated_points = line(new_time_points)
 
 #threshold values
