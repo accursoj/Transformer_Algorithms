@@ -9,7 +9,7 @@ from sklearn.metrics import mean_absolute_error
 import matplotlib.pyplot as plt
 from scipy import interpolate
 
-#loading dataset
+#loading dataset(1st month is 0 - 2976 rows)
 train = pd.read_csv("ETTm2_train.csv", usecols=["date","OT"], nrows= 2976)
 train['date'] = pd.to_datetime(train['date'])
 train['date'] = train['date'].apply(lambda x: dt.datetime.strptime(str(x),'%Y-%m-%d %H:%M:%S').timestamp())
