@@ -116,7 +116,6 @@ def plot_roc(val_gts, pred_probas, class_names, title):
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     plt.title(title)
-    # plt.legend(loc="lower right")
     plt.show()
 
     print()
@@ -128,14 +127,8 @@ def train_curves(x_history, model_name):
     type_acc = x_history["acc"]
     val_type_acc = x_history["val_acc"]
 
-    # loc_acc = x_history["loc_acc"]
-    # val_loc_acc = x_history["val_loc_acc"]
-
     type_mcc = x_history["mcc"]
     val_type_mcc = x_history["val_mcc"]
-
-    # loc_mcc = x_history["loc_acc"]
-    # val_loc_mcc = x_history["val_loc_mcc"]
 
     plt.figure(figsize=(8, 6))
     plt.plot(loss[::2], label="Training Loss")
@@ -157,16 +150,6 @@ def train_curves(x_history, model_name):
     plt.show()
     print()
 
-    # plt.figure(figsize=(8, 6))
-    # # plt.plot(loc_acc[::2], label="Training Location Accuracy")
-    # # plt.plot(val_loc_acc[::2], label="Validation Location Accuracy")
-    # plt.legend(loc="lower right")
-    # plt.ylabel("Location Accuracy")
-    # plt.ylim([min(plt.ylim()),1])
-    # plt.title(model_name + " Location Accuracy")
-    # plt.show()
-    # print()
-
     plt.figure(figsize=(8, 6))
     plt.plot(type_mcc[::2], label="Training Type MCC")
     plt.plot(val_type_mcc[::2], label="Validation Type MCC")
@@ -176,14 +159,4 @@ def train_curves(x_history, model_name):
     plt.title(model_name + " Type MCC")
     plt.show()
     print()
-
-    # plt.figure(figsize=(8, 6))
-    # plt.plot(loc_mcc[::2], label="Training Location MCC")
-    # plt.plot(val_loc_mcc[::2], label="Validation Location MCC")
-    # plt.legend(loc="lower right")
-    # plt.ylabel("Location MCC")
-    # plt.ylim([min(plt.ylim()),1])
-    # plt.title(model_name + " Location MCC")
-    # plt.show()
-
 
