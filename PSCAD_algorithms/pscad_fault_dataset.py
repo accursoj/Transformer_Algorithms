@@ -8,11 +8,12 @@ import math
 
 file_list = []
 #directory = input('Enter Folder Directory: ')
-directory = '/Users/josephaccurso/Downloads/Dataset for Transformer & PAR transients/data for transformer and par/transient disturbances/capacitor switching'
+directory = 'FPL_Datasets/PSCAD_datasets/Total_Multiclass/exciting_Class1'
 for filename in os.listdir(directory):
-    f = os.path.join(directory, filename)
-    if os.path.isfile(f):
-        file_list.append(f)
+    if filename.endswith('.txt'):    
+        f = os.path.join(directory, filename)
+        if os.path.isfile(f):
+            file_list.append(f)
 
 for i in range(len(file_list)):
 #for i in range(15):
@@ -36,7 +37,7 @@ for i in range(len(file_list)):
     # print('Presenting data from: ',file_list[i])
     # plt.show()
 
-# # Plot 3-Phase Signal of Last Opened File in 'file_list'
+# Plot 3-Phase Signal of Last Opened File in 'file_list'
 # plt.xlabel('Time (s)')
 # plt.ylabel('Differential Current (A)')
 # plt.plot(time,phaseA,label='Phase A')
