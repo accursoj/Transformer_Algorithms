@@ -1,9 +1,10 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'    # gets rid of harmless error messages
 os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/lib/cuda/'
+os.environ['NCCL_DEBUG'] = 'WARN'
 
-import sys
-sys.path.append('/home/isense/Transformer')
+# import sys
+# sys.path.append('/home/isense/Transformer')
 
 import pickle
 import numpy as np
@@ -16,6 +17,8 @@ import tensorflow as tf
 import keras
 from keras.optimizers import Adam
 from keras.metrics import CategoricalAccuracy
+from tensorflow_addons.metrics import MatthewsCorrelationCoefficient, F1Score
+
 from keras import backend as K
 
 from keras import Model, Sequential
@@ -61,8 +64,8 @@ print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
 
-signals = np.load("FPL_Datasets/ML_TIME/signals_full.npy")
-signals_gts = np.load("FPL_Datasets/ML_TIME/signals_gts3_full.npy")
+signals = np.load("assets/signals_full.npy")
+signals_gts = np.load("assets/signals_gts3_full.npy")
 # print(signals.shape)
 # print(signals_gts.shape)
 
@@ -84,17 +87,17 @@ signals_gts = np.load("FPL_Datasets/ML_TIME/signals_gts3_full.npy")
 #     X[i] = X[i] + noise
 # y = np.array(y)
 
-# np.save("FPL_Datasets/ML_TIME/darts_X_full.npy", X)
-# np.save("FPL_Datasets/ML_TIME/darts_y_full.npy", y)
+# np.save("assets/darts_X_full.npy", X)
+# np.save("assets/darts_y_full.npy", y)
 # del X, y, signals, signals_gts
 # gc.collect()
 
-# X = np.load("FPL_Datasets/ML_TIME/darts_X_full.npy", mmap_mode="r")
-# y = np.load("FPL_Datasets/ML_TIME/darts_y_full.npy", mmap_mode="r")
-# X = np.load("FPL_Datasets/ML_TIME/signals_full.npy")
-# y = np.load("FPL_Datasets/ML_TIME/signals_gts3_full.npy")
-X = np.load("FPL_Datasets/ML_TIME/vanilla_X_norm.npy", mmap_mode="r")
-y = np.load("FPL_Datasets/ML_TIME/vanilla_y_norm.npy", mmap_mode="r")
+# X = np.load("assets/darts_X_full.npy", mmap_mode="r")
+# y = np.load("assets/darts_y_full.npy", mmap_mode="r")
+# X = np.load("assets/signals_full.npy")
+# y = np.load("assets/signals_gts3_full.npy")
+X = np.load("assets/vanilla_X_norm.npy", mmap_mode="r")
+y = np.load("assets/vanilla_y_norm.npy", mmap_mode="r")
 
 X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
 print(X_tr.shape, y_tr.shape)
@@ -111,7 +114,7 @@ cfg = {
     "sub_name": 'darts_search',
 
     # training setting
-    "epoch": 7,
+    "epoch": 10,
     "start_search_epoch": 15,
     "init_lr": 0.001,
     "momentum": 0.9,
@@ -254,7 +257,7 @@ class MixedOP(tf.keras.layers.Layer):
         # return channel_shuffle(ans, 4)
         return x_1
 
-@keras.saving.register_keras_serializable() # (package='FPL_Datasets/ML_TIME/darts_transformer_temp', name='Cell')
+# @keras.saving.register_keras_serializable() # (package='assets/darts_transformer_temp', name='Cell')
 class Cell(tf.keras.layers.Layer):
     """Cell Layer"""
     def __init__(self, steps, multiplier, ch, reduction, reduction_prev, wd,
@@ -430,13 +433,13 @@ class SearchNetArch(object):
         # loc_output = Dense(15, activation="softmax", name="loc", kernel_initializer=kernel_init(),
         #                kernel_regularizer=regularizer(wd))(loc)
 
-        return Model(
+        return Model(inputs=
             (inputs, 
              alphas_normal 
             #  alphas_reduce, 
             #  betas_normal
             #  betas_reduce
-             ),
+            ),
             outputs=[typ_output], name=self.name) # loc_output], name=self.name)
 
     def get_genotype(self):
@@ -490,17 +493,17 @@ class SearchNetArch(object):
         return genotype   
 
 
-# assert keras.saving.get_registered_object('FPL_Datasets/ML_TIME/darts_transformer_temp>Cell') == Cell
-# assert keras.saving.get_registered_name(Cell) == 'FPL_Datasets/ML_TIME/darts_transformer_temp>Cell'
+# assert keras.saving.get_registered_object('assets/darts_transformer_temp>Cell') == Cell
+# assert keras.saving.get_registered_name(Cell) == 'assets/darts_transformer_temp>Cell'
 
 with strategy.scope():
     sna = SearchNetArch(cfg)
 
 sna_model = sna.model
-# sna_model.summary()
-# print("param size = {:f}MB".format(count_parameters_in_MB(sna_model)))
+sna_model.summary()
+print("param size = {:f}MB".format(count_parameters_in_MB(sna_model)))
 
-# plot_model(sna_model, to_file = 'FPL_Datasets/ML_TIME/darts_model.png', expand_nested=True, show_shapes=True)
+plot_model(sna_model, to_file = 'assets/darts_model.png', expand_nested=True, show_shapes=True)
 
 
 with strategy.scope(): 
@@ -590,105 +593,142 @@ with strategy.scope():
 
 
 
-# with strategy.scope(): 
-#     train_losses = [] 
-#     val_losses = [] 
-#     train_typ_accs = [] 
-#     val_typ_accs = [] 
-#     # train_loc_accs = [] 
-#     # val_loc_accs = [] 
+with strategy.scope(): 
+    train_losses = [] 
+    val_losses = [] 
+    train_typ_accs = [] 
+    val_typ_accs = [] 
+    # train_loc_accs = [] 
+    # val_loc_accs = [] 
 
-#     train_loss = 0
-#     val_loss = 10
-#     for epoch in range(7):
+    train_loss = 0
+    val_loss = 10
+    for epoch in range(cfg["epoch"]):
 
-#         if epoch >= 5:
-#             val_total_loss = 0.0
-#             val_num_batches = 0
-#             for inputs_val, typ_labels_val in tqdm(test_dataset): #, loc_labels_val in tqdm(test_dataset):
-#                 val_total_loss  += distributed_train_step_arch(inputs_val, typ_labels_val) #, loc_labels_val)
-#                 val_num_batches += 1
-#             val_loss = val_total_loss / val_num_batches
+        if epoch >= 5:
+            val_total_loss = 0.0
+            val_num_batches = 0
+            for inputs_val, typ_labels_val in tqdm(test_dataset): #, loc_labels_val in tqdm(test_dataset):
+                val_total_loss  += distributed_train_step_arch(inputs_val, typ_labels_val) #, loc_labels_val)
+                val_num_batches += 1
+            val_loss = val_total_loss / val_num_batches
 
-#         total_loss = 0.0
-#         num_batches = 0
-#         for inputs, typ_labels in tqdm(train_dataset):
-#             total_loss += distributed_train_step(inputs, typ_labels)
-#             num_batches += 1
-#         train_loss = total_loss / num_batches
+        total_loss = 0.0
+        num_batches = 0
+        for inputs, typ_labels in tqdm(train_dataset):
+            total_loss += distributed_train_step(inputs, typ_labels)
+            num_batches += 1
+        train_loss = total_loss / num_batches
 
-#         train_losses.append(train_loss)
-#         val_losses.append(val_loss)
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
 
-#         template = ("Epoch {}, Loss: {:.4f}, Type Accuracy: {:.2f}, Val Loss: {:.4f}, Val Type Accuracy: {:.2f}\n")
-#         print(template.format(epoch+1, train_loss,
-#                             typ_train_accuracy.result()*100,
-#                             # loc_train_accuracy.result()*100,
-#                             val_loss,
-#                             typ_val_accuracy.result()*100,
-#                             # loc_val_accuracy.result()*100)
-#                             ))
+        template = ("Epoch {}, Loss: {:.4f}, Type Accuracy: {:.2f}, Val Loss: {:.4f}, Val Type Accuracy: {:.2f}\n")
+        print(template.format(epoch+1, train_loss,
+                            typ_train_accuracy.result()*100,
+                            # loc_train_accuracy.result()*100,
+                            val_loss,
+                            typ_val_accuracy.result()*100,
+                            # loc_val_accuracy.result()*100)
+                            ))
 
-#         train_typ_accs.append(typ_train_accuracy.result())
-#         val_typ_accs.append(typ_val_accuracy.result())
-#         # train_loc_accs.append(loc_train_accuracy.result())
-#         # val_loc_accs.append(loc_val_accuracy.result())
+        train_typ_accs.append(typ_train_accuracy.result())
+        val_typ_accs.append(typ_val_accuracy.result())
+        # train_loc_accs.append(loc_train_accuracy.result())
+        # val_loc_accs.append(loc_val_accuracy.result())
 
-#         typ_train_accuracy.reset_states()
-#         # loc_train_accuracy.reset_states()
-#         typ_val_accuracy.reset_states()
-#         # loc_val_accuracy.reset_states()
+        typ_train_accuracy.reset_states()
+        # loc_train_accuracy.reset_states()
+        typ_val_accuracy.reset_states()
+        # loc_val_accuracy.reset_states()
 
-#         if epoch >= 5:
-#             genotype = sna.get_genotype()
-#             print(f"search arch: {genotype}\n")
-#             f = open('FPL_Datasets/ML_TIME/darts_search_arch_genotype_v2.py', 'a')
-#             f.write(f"\n{cfg['sub_name']}_{epoch} = {genotype}\n")
-#             f.close()
+        if epoch >= 5:
+            genotype = sna.get_genotype()
+            print(f"search arch: {genotype}\n")
+            f = open('assets/darts_search_arch_genotype_v2.py', 'a')
+            f.write(f"\n{cfg['sub_name']}_{epoch} = {genotype}\n")
+            f.close()
 
-# sna_model.save('FPL_Datasets/ML_TIME/darts_transformer_model.keras')
+sna_model.save('assets/darts_transformer_model')
+
+search_history = {
+    "train_loss" : np.array(train_losses),
+    "val_loss" : np.array(val_losses),
+    "train_typ_accs" : np.array(train_typ_accs),
+    "val_typ_accs" : np.array(val_typ_accs),
+    # "train_loc_accs" : np.array(train_loc_accs),
+    # "val_loc_accs" : np.array(val_loc_accs)
+}
+
+with open('assets/pc_darts_search_history_v2', 'wb') as file_pi:    # path to save model history
+    pickle.dump(search_history, file_pi)
+
+np.save("assets/pc_darts_search_history_v2.npy", search_history)
+
+# loaded_transformer_model = load_model('assets/darts_transformer_model', compile=False)   # path of complete model
+
+# ###
+# with strategy.scope():
+#     def test_step(inputs, typ_labels):
+
+#         val_logits = loaded_transformer_model(inputs, training =False)
+#         typ_val_accuracy.update_state(typ_labels, val_logits)
+
+#     for inputs, typ_labels in tqdm(test_dataset):
+#         test_step(inputs, typ_labels)
+#     typ_val_acc = typ_val_accuracy.result()
+#     print("Validation Acc??: %.4f" % (float(typ_val_acc)))
+# ###
 
 
 
 
-# search_history = {
-#     "train_loss" : np.array(train_losses),
-#     "val_loss" : np.array(val_losses),
-#     "train_typ_accs" : np.array(train_typ_accs),
-#     "val_typ_accs" : np.array(val_typ_accs),
-#     # "train_loc_accs" : np.array(train_loc_accs),
-#     # "val_loc_accs" : np.array(val_loc_accs)
-# }
 
 
-
-# with open('FPL_Datasets/ML_TIME/pc_darts_search_history_v2', 'wb') as file_pi:    # path to save model history
-#     pickle.dump(search_history, file_pi)
-
-with open('FPL_Datasets/ML_TIME/pc_darts_search_history_v2', "rb") as file_pi:    # path to load model history
+with open('assets/pc_darts_search_history_v2', "rb") as file_pi:    # path to load model history
     history = pickle.load(file_pi)
 
-# np.save("pc_darts_search_history_v2.npy", search_history)
 
-# plt.rcParams.update({'legend.fontsize': 12,
-#                     'axes.labelsize': 16, 
-#                     'axes.titlesize': 16,
-#                     'xtick.labelsize': 16,
-#                     'ytick.labelsize': 16})
 
-loaded_transformer_model = load_model('FPL_Datasets/ML_TIME/darts_transformer_model.keras')   # path of complete model
+plt.rcParams.update({'legend.fontsize': 12,
+                    'axes.labelsize': 16, 
+                    'axes.titlesize': 16,
+                    'xtick.labelsize': 16,
+                    'ytick.labelsize': 16})
 
+
+loaded_transformer_model = load_model('assets/darts_transformer_model', compile=False)   # path of complete model
+loaded_transformer_model.summary()
+layers = loaded_transformer_model.layers
+first_layer = layers[0]
+print(first_layer.input_shape)
+
+
+
+loaded_transformer_model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
+                optimizer = Adam(learning_rate=0.001),
+                metrics={"type":[ 
+                                CategoricalAccuracy(name="acc"),
+                                MatthewsCorrelationCoefficient(num_classes=46, name ="mcc"),
+                                F1Score(num_classes=46, name='f1_score')
+                                ] 
+                        }
+                )
+for inputs_val, typ_labels_val in tqdm(test_dataset):
+    typ_output = loaded_transformer_model.evaluate((inputs_val, sna.arch_parameters), typ_labels_val)
+
+# loaded_transformer_model.evaluate(test_dataset, verbose=1)
 
 type_names = ["exciting_Class1","exciting_Class2","exciting_Class3","exciting_Class4","exciting_Class5", "exciting_Class6","exciting_Class7","exciting_Class8","exciting_Class9","exciting_Class10", "exciting_Class11","exciting_tt","exciting_ww",
               'series_Class1','series_Class2','series_Class3','series_Class4','series_Class5','series_Class6','series_Class7','series_Class8','series_Class9','series_Class10','series_Class11','series_tt','series_ww',
                'transformer_Class1','transformer_Class2','transformer_Class3','transformer_Class4','transformer_Class5','transformer_Class6','transformer_Class7','transformer_Class8','transformer_Class9','transformer_Class10','transformer_Class11','transformer_tt','transformer_ww',
                 "Capacitor_Switch", "external_fault","ferroresonance",  "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
 
-plt.rcParams.update({'legend.fontsize': 14,
-                    'axes.labelsize': 18, 
-                    'axes.titlesize': 18,
-                    'xtick.labelsize': 18,
-                    'ytick.labelsize': 18})
+# plt.rcParams.update({'legend.fontsize': 14,
+#                     'axes.labelsize': 18, 
+#                     'axes.titlesize': 18,
+#                     'xtick.labelsize': 18,
+#                     'ytick.labelsize': 18})
 
 
 def test_eval(model, history):
@@ -697,8 +737,8 @@ def test_eval(model, history):
     train_curves(history, "DARTS Train Search:")
     
     # create model analytics using testing data
-    pred_probas = model.predict(X_test, verbose = 1)
-    # pred_probas = model.predict((X_test, *sna.arch_parameters), verbose = 1)
+    # pred_probas = model.predict(X_test, verbose = 1)
+    pred_probas = model.predict(test_dataset,  verbose = 1)
 
 
     y_type = np.argmax(y_test, axis = 1)
@@ -714,6 +754,7 @@ def test_eval(model, history):
     print("\nConfusion Matrix: Fault Type ")
     conf_matrix = confusion_matrix(y_type, pred_type)
     test_accuracy = plot_confusion_matrix(cm = conf_matrix, normalize = False,  target_names = type_names, title = "DARTS Train Search:")
+    test_accuracy
 
     print("\nROC Curve: Fault Type")
     plot_roc(y_test, pred_probas, class_names = type_names, title = "DARTS Train Search:")
@@ -723,17 +764,17 @@ def test_eval(model, history):
 from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
 
-test_eval(sna_model, history)
-# test_eval(loaded_transformer_model, history)
+# test_eval(sna_model, history)
+test_eval(loaded_transformer_model, history)
 
 
-with open("FPL_Datasets/ML_TIME/darts_search_arch_genotype_v2.py") as graph_file:
+with open("assets/darts_search_arch_genotype_v2.py") as graph_file:
     graphs = graph_file.readlines()
     epoch = 0
     for i, g in enumerate(graphs):
         if i%2 != 0:
             genotype = eval(g.split(" = ")[1])
-            plot(genotype.normal, "FPL_Datasets/ML_TIME/pc_darts_genotypes/normal", str(epoch+1))
+            plot(genotype.normal, "assets/pc_darts_genotypes/normal", str(epoch+1))
             epoch+=1
 
 
@@ -742,10 +783,10 @@ def sorted_alphanumeric(data):
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
     return sorted(data, key=alphanum_key)
 
-filenames = ["FPL_Datasets/ML_TIME/pc_darts_genotypes/" + f for f in sorted_alphanumeric(os.listdir("FPL_Datasets/ML_TIME/pc_darts_genotypes")) if f.endswith(".png")]
+filenames = ["assets/pc_darts_genotypes/" + f for f in sorted_alphanumeric(os.listdir("assets/pc_darts_genotypes")) if f.endswith(".png")]
 
 
 images = []
 for filename in filenames:
     images.append(imageio.imread(filename))
-imageio.mimsave('FPL_Datasets/ML_TIME/genotypes.gif', images)
+imageio.mimsave('assets/genotypes.gif', images)

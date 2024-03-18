@@ -70,7 +70,7 @@ def process_data():
             print("\n{}".format(classes[i]))
             for j in tqdm(range(0,13), position=0, leave=True):
                 # count = j + (14 * (i-1))
-                fault_class_path = "FPL_Datasets/PSCAD_datasets/Total_Multiclass/{}{}/".format(classes[i],tags[j])
+                fault_class_path = "PSCAD_datasets/Total_Multiclass/{}{}/".format(classes[i],tags[j])
                 fault_file_names = os.listdir(fault_class_path)
                 for k in fault_file_names:
                     fault_file_path = fault_class_path + k
@@ -85,7 +85,7 @@ def process_data():
             trans_tags = ["capacitor switching", "external fault with CT saturation", "ferroresonance", "magnetising inrush", "non-linear load switching","sympathetic inrush"]
             print("\n{}".format(classes[i]))
             for j in tqdm(range(0,6), position=0, leave=True):
-                fault_class_path = "FPL_Datasets/PSCAD_datasets/Total_Multiclass/{}{}/".format(classes[i],trans_tags[j])
+                fault_class_path = "PSCAD_datasets/Total_Multiclass/{}{}/".format(classes[i],trans_tags[j])
                 fault_file_names = os.listdir(fault_class_path)
                 for k in fault_file_names:
                     fault_file_path = fault_class_path + k
@@ -162,12 +162,12 @@ print("No. of sympathetic_inrush: \t", len(y[y[:,45]==1]))
 
 
 
-np.save("FPL_Datasets/ML_TIME/signals_full.npy", X)
-np.save("FPL_Datasets/ML_TIME/signals_gts3_full.npy", y)
+np.save("assets/signals_full.npy", X)
+np.save("assets/signals_gts3_full.npy", y)
 
 
-signals = np.load("FPL_Datasets/ML_TIME/signals_full.npy")
-signals_gts = np.load("FPL_Datasets/ML_TIME/signals_gts3_full.npy")
+signals = np.load("assets/signals_full.npy")
+signals_gts = np.load("assets/signals_gts3_full.npy")
 print(signals.shape)
 print(signals_gts.shape)
 
@@ -208,7 +208,7 @@ for i in tqdm(range(X.shape[0])):
 y = np.array(y)
 
 
-np.save("FPL_Datasets/ML_TIME/vanilla_X_norm.npy", X)
-np.save("FPL_Datasets/ML_TIME/vanilla_y_norm.npy", y)
+np.save("assets/vanilla_X_norm.npy", X)
+np.save("assets/vanilla_y_norm.npy", y)
 del X, y, signals, signals_gts
 gc.collect()

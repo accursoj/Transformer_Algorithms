@@ -31,14 +31,14 @@ from dl_eval_plot_fns import plot_confusion_matrix, plot_roc, train_curves
 NUM_CLASSES = 46
 
 # training iterations
-EPOCHS = 3
+EPOCHS = 10
 
 try: # detect TPUs
     tpu = tf.distribute.cluster_resolver.TPUClusterResolver.connect() # TPU detection
     strategy = tf.distribute.TPUStrategy(tpu)
 except ValueError: # detect GPUs
-    # strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
-    strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
+    strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
+    # strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
 
 
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
@@ -47,8 +47,8 @@ print(tf.__version__)   # running tensorflow > 2.10 does not support multi-GPU u
 def prepare_tensors(norm=None):
     if norm:
         print('Loading normalized data...')
-        X = np.load("FPL_Datasets/ML_TIME/vanilla_X_norm.npy", mmap_mode="r")
-        y = np.load("FPL_Datasets/ML_TIME/vanilla_y_norm.npy", mmap_mode="r")
+        X = np.load("assets/vanilla_X_norm.npy", mmap_mode="r")
+        y = np.load("assets/vanilla_y_norm.npy", mmap_mode="r")
 
         # create 80:20 training-testing split of  data
         print('Splitting normalized data...')
@@ -85,8 +85,8 @@ def prepare_tensors(norm=None):
 
     else:
         print('Loading standard data...')
-        X = np.load("FPL_Datasets/ML_TIME/signals_full.npy", mmap_mode="r")
-        y = np.load("FPL_Datasets/ML_TIME/signals_gts3_full.npy", mmap_mode="r")
+        X = np.load("assets/signals_full.npy", mmap_mode="r")
+        y = np.load("assets/signals_gts3_full.npy", mmap_mode="r")
 
         # create 80:20 training-testing split of  data
         print('Splitting standard data...')
@@ -188,10 +188,10 @@ with strategy.scope():
     transformer_model = build_transformer_model()
 
 transformer_model.summary()
-plot_model(transformer_model, to_file='FPL_Datasets/ML_TIME/vanilla_model.png', expand_nested=True, show_shapes=True)
+plot_model(transformer_model, to_file='assets/vanilla_model.png', expand_nested=True, show_shapes=True)
 
 
-checkpoint_filepath = "FPL_Datasets/ML_TIME/cnn_attention_fault_detr_v1_full.h5"    # path to save checkpoint weights
+checkpoint_filepath = "assets/cnn_attention_fault_detr_v1_full.h5"    # path to save checkpoint weights
 
 # # uncomment if you want to start the training on pre-existing checkpoint weights
 # transformer_model.load_weights(checkpoint_filepath)
@@ -235,14 +235,14 @@ transformer_model_history = transformer_model.fit(X_train,
                                                 )
 
 
-with open('FPL_Datasets/ML_TIME/transformer_model_fault_detr_v1_history_full', 'wb') as file_pi:    # path to save model history
+with open('assets/transformer_model_fault_detr_v1_history_full', 'wb') as file_pi:    # path to save model history
     pickle.dump(transformer_model_history.history, file_pi)
 
-with open('FPL_Datasets/ML_TIME/transformer_model_fault_detr_v1_history_full', "rb") as file_pi:    # path to load model history
+with open('assets/transformer_model_fault_detr_v1_history_full', "rb") as file_pi:    # path to load model history
     history = pickle.load(file_pi)
 
 transformer_model.load_weights(checkpoint_filepath)
-transformer_model.save('FPL_Datasets/ML_TIME/vanilla_transformer_model_v1.keras')  # path to save complete model
+transformer_model.save('assets/vanilla_transformer_model_v1.keras')  # path to save complete model
 
 
 test_metrics = transformer_model.evaluate(X_test, y_test)
@@ -294,7 +294,7 @@ test_eval(transformer_model, history)
 
 
 # perform explicit predictions
-loaded_transformer_model = load_model('FPL_Datasets/ML_TIME/vanilla_transformer_model.keras')   # path of complete model
+loaded_transformer_model = load_model('assets/vanilla_transformer_model_v1.keras')   # path of complete model
 
 def prediction(input, loaded_model): # shape(726, 3), /file.keras
 
