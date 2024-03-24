@@ -50,8 +50,6 @@ from graphviz import Digraph
 
 from plot_utils import train_curves, plot
 
-from dl_eval_plot_fns import plot_confusion_matrix, plot_roc
-
 
 try: # detect TPUs
     tpu = tf.distribute.cluster_resolver.TPUClusterResolver.connect() # TPU detection
@@ -64,8 +62,8 @@ print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
 
 
-signals = np.load("assets/signals_full.npy")
-signals_gts = np.load("assets/signals_gts3_full.npy")
+# signals = np.load("assets/signals_full.npy")
+# signals_gts = np.load("assets/signals_gts3_full.npy")
 # print(signals.shape)
 # print(signals_gts.shape)
 
@@ -685,8 +683,8 @@ np.save("assets/pc_darts_search_history_v2.npy", search_history)
 
 
 
-with open('assets/pc_darts_search_history_v2', "rb") as file_pi:    # path to load model history
-    history = pickle.load(file_pi)
+# with open('assets/pc_darts_search_history_v2', "rb") as file_pi:    # path to load model history
+#     history = pickle.load(file_pi)
 
 
 
@@ -696,33 +694,35 @@ plt.rcParams.update({'legend.fontsize': 12,
                     'xtick.labelsize': 16,
                     'ytick.labelsize': 16})
 
-
-loaded_transformer_model = load_model('assets/darts_transformer_model', compile=False)   # path of complete model
-loaded_transformer_model.summary()
-layers = loaded_transformer_model.layers
-first_layer = layers[0]
-print(first_layer.input_shape)
+train_curves(search_history, "DARTS Train Search:")
 
 
+# loaded_transformer_model = load_model('assets/darts_transformer_model', compile=False)   # path of complete model
+# loaded_transformer_model.summary()
+# layers = loaded_transformer_model.layers
+# first_layer = layers[0]
+# print(first_layer.input_shape)
 
-loaded_transformer_model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
-                optimizer = Adam(learning_rate=0.001),
-                metrics={"type":[ 
-                                CategoricalAccuracy(name="acc"),
-                                MatthewsCorrelationCoefficient(num_classes=46, name ="mcc"),
-                                F1Score(num_classes=46, name='f1_score')
-                                ] 
-                        }
-                )
-for inputs_val, typ_labels_val in tqdm(test_dataset):
-    typ_output = loaded_transformer_model.evaluate((inputs_val, sna.arch_parameters), typ_labels_val)
+
+
+# loaded_transformer_model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
+#                 optimizer = Adam(learning_rate=0.001),
+#                 metrics={"type":[ 
+#                                 CategoricalAccuracy(name="acc"),
+#                                 MatthewsCorrelationCoefficient(num_classes=46, name ="mcc"),
+#                                 F1Score(num_classes=46, name='f1_score')
+#                                 ] 
+#                         }
+#                 )
+# for inputs_val, typ_labels_val in tqdm(test_dataset):
+#     typ_output = loaded_transformer_model.evaluate((inputs_val, sna.arch_parameters), typ_labels_val)
 
 # loaded_transformer_model.evaluate(test_dataset, verbose=1)
 
-type_names = ["exciting_Class1","exciting_Class2","exciting_Class3","exciting_Class4","exciting_Class5", "exciting_Class6","exciting_Class7","exciting_Class8","exciting_Class9","exciting_Class10", "exciting_Class11","exciting_tt","exciting_ww",
-              'series_Class1','series_Class2','series_Class3','series_Class4','series_Class5','series_Class6','series_Class7','series_Class8','series_Class9','series_Class10','series_Class11','series_tt','series_ww',
-               'transformer_Class1','transformer_Class2','transformer_Class3','transformer_Class4','transformer_Class5','transformer_Class6','transformer_Class7','transformer_Class8','transformer_Class9','transformer_Class10','transformer_Class11','transformer_tt','transformer_ww',
-                "Capacitor_Switch", "external_fault","ferroresonance",  "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
+# type_names = ["exciting_Class1","exciting_Class2","exciting_Class3","exciting_Class4","exciting_Class5", "exciting_Class6","exciting_Class7","exciting_Class8","exciting_Class9","exciting_Class10", "exciting_Class11","exciting_tt","exciting_ww",
+#               'series_Class1','series_Class2','series_Class3','series_Class4','series_Class5','series_Class6','series_Class7','series_Class8','series_Class9','series_Class10','series_Class11','series_tt','series_ww',
+#                'transformer_Class1','transformer_Class2','transformer_Class3','transformer_Class4','transformer_Class5','transformer_Class6','transformer_Class7','transformer_Class8','transformer_Class9','transformer_Class10','transformer_Class11','transformer_tt','transformer_ww',
+#                 "Capacitor_Switch", "external_fault","ferroresonance",  "Magnetic_Inrush","Non_Linear_Load_Switch","Sympathetic_inrush"]
 
 # plt.rcParams.update({'legend.fontsize': 14,
 #                     'axes.labelsize': 18, 
@@ -731,62 +731,27 @@ type_names = ["exciting_Class1","exciting_Class2","exciting_Class3","exciting_Cl
 #                     'ytick.labelsize': 18})
 
 
-def test_eval(model, history):
-
-    print("\nTesting ")
-    train_curves(history, "DARTS Train Search:")
-    
-    # create model analytics using testing data
-    # pred_probas = model.predict(X_test, verbose = 1)
-    pred_probas = model.predict(test_dataset,  verbose = 1)
 
 
-    y_type = np.argmax(y_test, axis = 1)
-
-    pred_type = np.argmax(pred_probas, axis = 1)
-
-    ###################################################################################################################
-
-    print("\nClassification Report: Fault Type ")
-    print(classification_report(y_type, pred_type, target_names = type_names, digits=6))
-    print("Matthews Correlation Coefficient: ", matthews_corrcoef(y_type, pred_type))
-
-    print("\nConfusion Matrix: Fault Type ")
-    conf_matrix = confusion_matrix(y_type, pred_type)
-    test_accuracy = plot_confusion_matrix(cm = conf_matrix, normalize = False,  target_names = type_names, title = "DARTS Train Search:")
-    test_accuracy
-
-    print("\nROC Curve: Fault Type")
-    plot_roc(y_test, pred_probas, class_names = type_names, title = "DARTS Train Search:")
-
-    ###################################################################################################################
-
-from tensorflow.python.ops.numpy_ops import np_config
-np_config.enable_numpy_behavior()
-
-# test_eval(sna_model, history)
-test_eval(loaded_transformer_model, history)
+# with open("assets/darts_search_arch_genotype_v2.py") as graph_file:
+#     graphs = graph_file.readlines()
+#     epoch = 0
+#     for i, g in enumerate(graphs):
+#         if i%2 != 0:
+#             genotype = eval(g.split(" = ")[1])
+#             plot(genotype.normal, "assets/pc_darts_genotypes/normal", str(epoch+1))
+#             epoch+=1
 
 
-with open("assets/darts_search_arch_genotype_v2.py") as graph_file:
-    graphs = graph_file.readlines()
-    epoch = 0
-    for i, g in enumerate(graphs):
-        if i%2 != 0:
-            genotype = eval(g.split(" = ")[1])
-            plot(genotype.normal, "assets/pc_darts_genotypes/normal", str(epoch+1))
-            epoch+=1
+# def sorted_alphanumeric(data):
+#     convert = lambda text: int(text) if text.isdigit() else text.lower()
+#     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+#     return sorted(data, key=alphanum_key)
+
+# filenames = ["assets/pc_darts_genotypes/" + f for f in sorted_alphanumeric(os.listdir("assets/pc_darts_genotypes")) if f.endswith(".png")]
 
 
-def sorted_alphanumeric(data):
-    convert = lambda text: int(text) if text.isdigit() else text.lower()
-    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
-    return sorted(data, key=alphanum_key)
-
-filenames = ["assets/pc_darts_genotypes/" + f for f in sorted_alphanumeric(os.listdir("assets/pc_darts_genotypes")) if f.endswith(".png")]
-
-
-images = []
-for filename in filenames:
-    images.append(imageio.imread(filename))
-imageio.mimsave('assets/genotypes.gif', images)
+# images = []
+# for filename in filenames:
+#     images.append(imageio.imread(filename))
+# imageio.mimsave('assets/genotypes.gif', images)
