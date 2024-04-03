@@ -55,8 +55,8 @@ try: # detect TPUs
     tpu = tf.distribute.cluster_resolver.TPUClusterResolver.connect() # TPU detection
     strategy = tf.distribute.TPUStrategy(tpu)
 except ValueError: # detect GPUs
-    # strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
-    strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
+    strategy = tf.distribute.MirroredStrategy() # for GPU or multi-GPU machines
+    # strategy = tf.distribute.get_strategy() # default strategy that works on CPU and single GPU
 
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
