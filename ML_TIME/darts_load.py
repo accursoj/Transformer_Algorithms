@@ -56,7 +56,7 @@ from PIL import Image
 # number of classes (including a no fault class)
 NUM_CLASSES = 46
 INPUT_SHAPE = (726, 3)
-EPOCHS = 10
+EPOCHS = 50
 
 Genotype = namedtuple('Genotype', ['normal', 'normal_concat'])
 
@@ -70,13 +70,6 @@ except ValueError: # detect GPUs
 
 print("Number of accelerators: ", strategy.num_replicas_in_sync)
 print(tf.__version__)
-
-# X = np.load("assets/vanilla_X_norm.npy", mmap_mode="r")
-# y = np.load("assets/vanilla_y_norm.npy", mmap_mode="r")
-
-# X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
-# print(X_tr.shape, y_tr.shape)
-# print(X_te.shape, y_te.shape)
 
 
 cfg = {
@@ -93,26 +86,15 @@ cfg = {
     "start_search_epoch": 15,
     "init_lr": 0.001,
     "momentum": 0.9,
-    "weights_decay": 3e-4,
+    # "weights_decay": 3e-4,
+    "weights_decay": None,
+
     "grad_clip": 10.0,
 
     "arch_learning_rate": 0.001,
     "arch_weight_decay": 0.001,
     }
 
-def TransformerEncoder(inputs, num_heads, head_size, dropout, units_dim):
-    encode1 = LayerNormalization(epsilon=1e-6)(inputs)
-    attention_output = MultiHeadAttention(
-        num_heads=num_heads, key_dim=head_size , dropout=dropout
-    )(encode1, encode1)
-    encode2 = Add()([attention_output, encode1])
-    encode3 = LayerNormalization(epsilon=1e-6)(encode2)
-    for units in [units_dim * 2, units_dim]:
-        encode3 = Dense(units=units, activation='relu')(encode3)
-        encode3 = Dropout(dropout)(encode3)
-    outputs = Add()([encode3, encode2])
-
-    return outputs
 
 
 
@@ -160,24 +142,33 @@ class Cell(tf.keras.layers.Layer):
         self.preprocess1 = Densely(ch, wd=wd)
 
         self._ops = []
-        for op_name, _ in self.genotype.normal:
-            self._ops.append(OPS[op_name](ch, wd))
+       
+        for op_name, in_node in self.genotype:
+            self._ops.append((OPS[op_name](ch, wd), in_node))
     
-    def call(self, s0, s1, weights):
-        s0 = self.preprocess0(s0)
-        s1 = self.preprocess1(s1)
+    def call(self, s0, s1):
+        #Apply a default Densely layer to the initial input stems or to the output of the two previous cells (s0 and s1)
+        s0 = self.preprocess0(s0)   #stem0
+        s1 = self.preprocess1(s1)   #stem1
 
-        states = [s0, s1]
-        offset = 0
-        for op in self._ops:
+        stems = [s0, s1]
+
+        offset = 0      #Used in conjunction with for i loop to index two elements at a time in self._ops
+                        #Each intemrediate node represents the sum of two sequential operations in the normal genotype
+                        #E.g. intermediate node0 is the sum of the first two operations and intermediate node1 is the sum of the next two operations
+        for _ in range(cfg['layers']):                                  #Iterate through the number of intermediate nodes
             s = 0
-            for j, h in enumerate(states):
-                branch = op(h, weights[offset + j])
+            for i in range(2):                                          #Iterate through the two sequential operations represented by each intermediate node
+                in_node = self._ops[offset + i][1]                      #Integer that represents the index of the node connected to the current node by the operation  
+                branch = self._ops[offset + i][0](stems[in_node])       #Apply operation to connecting node in stems[]
                 s += branch
-            offset += len(states)
-            states.append(s)
-        return tf.concat(states[-self.genotype.normal_concat[-1]:], axis=-1)
-    
+            offset += 2
+            stems.append(s)                                             #Append the summation of operations for this intermediate node in stems[]
+        # concat_list = list(genotype.normal_concat)
+        # return tf.concat([stems[j] for j in concat_list], axis=-1)       #Concatenate the range of intermediate nodes specified in genotype.normal_concat
+        return tf.concat([stems[4], stems[5]], axis=-1)       #Concatenate the range of intermediate nodes specified in genotype.normal_concat
+
+
 class DARTS_Transformer(Model):
     def __init__(self, cfg, genotype, input_shape, num_classes):
         super(DARTS_Transformer, self).__init__()
@@ -185,34 +176,51 @@ class DARTS_Transformer(Model):
         self._input_shape = input_shape
         self.num_classes = num_classes
         self.cfg = cfg
+        self.wd = cfg['weights_decay']
 
-        self.cell = Cell(genotype, ch=self.cfg['init_channels'], wd=self.cfg['weights_decay'])
+        # self.cell = Cell(genotype, ch=self.cfg['init_channels'], wd=self.cfg['weights_decay'])
+        # self.cell = Cell(genotype, wd=self.cfg['weights_decay'])
 
-        self.model = self.build_transformer_model()
 
-    def call(self, inputs):
-        x = self.cell(inputs, inputs, weights=None)
-        x = self.model(x)
-        return x
+        # self.model = self.build_transformer_model()
+        self.model = self._build_model()
+    
+    def _build_model(self):
+        # wd = self.cfg['weights_decay']
 
-    def build_transformer_model(self):
-        input_sig = Input(shape=(726, 3))   # shape = shape of single data file
-        sig = input_sig/6065.3965
-        sig = Reshape((6, 121, 3))(sig)     # reshape data file (ex. (726, ...) --> (6, 121, ...))
+        inputs = Input(shape=self._input_shape)
+        sig = Rescaling(scale=1.0/6065.3467)(inputs)                #Scale and Normalize inputs
+        sig = Reshape((6, 121, 3))(sig)                             #Temporal Slicing
         sig = TimeDistributed(Flatten())(sig)
 
-        sig = Dense(1024, activation="relu")(sig)
+        sig = Dense(1024, activation='relu')(sig)
         sig = Dropout(0.2)(sig)
-        sig = Dense(64, activation="relu")(sig)
+        sig = Dense(64, activation='relu')(sig)
         sig = Dropout(0.2)(sig)
 
-        embeddings = Embedding(input_dim=6, output_dim=64)  # input_dim = value from reshaped data: Reshape((input_dim, ..., ...))
-        position_embed = embeddings(tf.range(start=0, limit=6, delta=1))    # limit = input_dim
-        sig = sig + position_embed
+        embeddings = Embedding(input_dim=6, output_dim=64)
 
-        for e in range(4):
-            sig = TransformerEncoder(sig, num_heads=4, head_size=64, dropout=0.2, units_dim=64)
+        # position_range = Position()
+        # position_embed = embeddings(position_range)
+        # position_range = tf.range(start=0, limit=6, delta=1)
+        # position_embed = embeddings(position_range.numpy())
 
+        position_embed = embeddings(tf.range(start=0, limit=6, delta=1))
+        sig = sig + position_embed                                  #Element-wise addition of position embeddings
+
+        s0 = s1 = sig                                               #Copy inputs as intiial stem0 and stem1
+
+        for layer_index in range(self.cfg['layers']):               #Iterate through num of cells
+            cell = Cell(genotype=self.genotype, 
+                        ch=self.cfg['init_channels'], 
+                        wd=self.wd,
+                        name=f"Cell_{layer_index}")                 #Initialize Cell
+            
+            s0, s1 = s1, cell(s0, s1)                               #Set stem 0 and stem 1 as two previous cells
+
+        last_cell_out = s1
+        sig = Dense(64, activation='relu')(last_cell_out)
+        sig = Dropout(0.1)(sig)
         sig = Flatten()(sig)
 
         typ = Dense(256, activation="relu")(sig)
@@ -220,40 +228,63 @@ class DARTS_Transformer(Model):
         typ = Dense(128, activation="relu")(typ)
         typ = Dense(32, activation="relu")(typ)
         typ = Dropout(0.2)(typ)
-        typ_output = Dense(NUM_CLASSES, activation="softmax", name="type")(typ)
+        typ_output = Dense(self.num_classes, activation="softmax", name="type", kernel_initializer=kernel_init(),
+                       kernel_regularizer=regularizer(self.wd))(typ)
+        return Model(inputs=inputs, outputs=[typ_output])
 
 
-        # initalize model
-        model = Model(inputs=input_sig, outputs=[typ_output])
+    # def call(self, inputs):
+    #     x = self.cell(inputs, inputs, weights=None)
+    #     x = self.model(x)
+    #     return x
 
-        model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
-                    optimizer = Adam(learning_rate=0.001),
-                    metrics={"type":[ 
-                                        CategoricalAccuracy(name="acc"),
-                                        MatthewsCorrelationCoefficient(num_classes=NUM_CLASSES, name ="mcc"),
-                                        F1Score(num_classes=NUM_CLASSES, name='f1_score')
-                                    ] 
-                                }
-                        )
+    # def build_transformer_model(self):
+    #     input_sig = Input(shape=(726, 3))   # shape = shape of single data file
+    #     sig = input_sig/6065.3965
+    #     sig = Reshape((6, 121, 3))(sig)     # reshape data file (ex. (726, ...) --> (6, 121, ...))
+    #     sig = TimeDistributed(Flatten())(sig)
 
-        model._name = "DARTS_Transformer_Model"
+    #     sig = Dense(1024, activation="relu")(sig)
+    #     sig = Dropout(0.2)(sig)
+    #     sig = Dense(64, activation="relu")(sig)
+    #     sig = Dropout(0.2)(sig)
 
-        return model
+    #     embeddings = Embedding(input_dim=6, output_dim=64)  # input_dim = value from reshaped data: Reshape((input_dim, ..., ...))
+    #     position_embed = embeddings(tf.range(start=0, limit=6, delta=1))    # limit = input_dim
+    #     sig = sig + position_embed
 
-def prepare_tensors(norm=None):
-    if norm:
-        print('Loading normalized data...')
-        X = np.load("assets/vanilla_X_norm.npy", mmap_mode="r")
-        y = np.load("assets/vanilla_y_norm.npy", mmap_mode="r")
+    #     for e in range(4):
+    #         sig = TransformerEncoder(sig, num_heads=4, head_size=64, dropout=0.2, units_dim=64)
 
-        # create 80:20 training-testing split of  data
-        print('Splitting normalized data...')
-        X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
-        print(X_tr.shape, y_tr.shape)
-        print(X_te.shape, y_te.shape)
+    #     sig = Flatten()(sig)
 
+    #     typ = Dense(256, activation="relu")(sig)
+    #     typ = Dropout(0.2)(typ)
+    #     typ = Dense(128, activation="relu")(typ)
+    #     typ = Dense(32, activation="relu")(typ)
+    #     typ = Dropout(0.2)(typ)
+    #     typ_output = Dense(NUM_CLASSES, activation="softmax", name="type")(typ)
+
+
+    #     # initalize model
+    #     model = Model(inputs=input_sig, outputs=[typ_output])
+
+    #     model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
+    #                 optimizer = Adam(learning_rate=0.001),
+    #                 metrics={"type":[ 
+    #                                     CategoricalAccuracy(name="acc"),
+    #                                     MatthewsCorrelationCoefficient(num_classes=NUM_CLASSES, name ="mcc"),
+    #                                     F1Score(num_classes=NUM_CLASSES, name='f1_score')
+    #                                 ] 
+    #                             }
+    #                     )
+
+    #     model._name = "DARTS_Transformer_Model"
+
+    #     return model
+    
+def convert_tensors(X_tr, X_te, y_tr, y_te):
         print('Converting to tensors...')
-        # convert numpy arrays to tensors
         tr_shape = X_tr.shape[0]
         X_train1 = tf.convert_to_tensor(X_tr[:(tr_shape//8)*1])
         X_train2 = tf.convert_to_tensor(X_tr[(tr_shape//8)*1: (tr_shape//8)*2])
@@ -274,6 +305,27 @@ def prepare_tensors(norm=None):
 
         y_train = tf.convert_to_tensor(y_tr)
         y_test = tf.convert_to_tensor(y_te)
+        return X_train, X_test, y_train, y_test
+
+def split_data(X, y):
+        X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
+        print(X_tr.shape, y_tr.shape)
+        print(X_te.shape, y_te.shape)
+        return X_tr, X_te, y_tr, y_te
+
+def prepare_tensors(norm=None):
+    if norm:
+        print('Loading normalized data...')
+        X = np.load("assets/vanilla_X_norm.npy", mmap_mode="r")
+        y = np.load("assets/vanilla_y_norm.npy", mmap_mode="r")
+
+        # create 80:20 training:testing data split
+        print('Splitting normalized data...')
+        X_tr, X_te, y_tr, y_te = split_data(X, y)
+
+        print('Converting to tensors...')
+        # convert numpy arrays to tensors
+        X_train, X_test, y_train, y_test = convert_tensors(X_tr, X_te, y_tr, y_te)
 
         print('Normalized tensors:')
         print(f'X_train, y_train shapes: {X_train.shape}, {y_train.shape}')
@@ -286,32 +338,11 @@ def prepare_tensors(norm=None):
 
         # create 80:20 training-testing split of  data
         print('Splitting standard data...')
-        X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.20, shuffle = True, random_state = 77, stratify = y)
-        print(X_tr.shape, y_tr.shape)
-        print(X_te.shape, y_te.shape)
+        X_tr, X_te, y_tr, y_te = split_data(X, y)
 
         # convert numpy arrays to tensors
         print('Converting to tensors...')
-        tr_shape = X_tr.shape[0]
-        X_train1 = tf.convert_to_tensor(X_tr[:(tr_shape//8)*1])
-        X_train2 = tf.convert_to_tensor(X_tr[(tr_shape//8)*1: (tr_shape//8)*2])
-        X_train3 = tf.convert_to_tensor(X_tr[(tr_shape//8)*2: (tr_shape//8)*3])
-        X_train4 = tf.convert_to_tensor(X_tr[(tr_shape//8)*3: (tr_shape//8)*4])
-        X_train5 = tf.convert_to_tensor(X_tr[(tr_shape//8)*4: (tr_shape//8)*5])
-        X_train6 = tf.convert_to_tensor(X_tr[(tr_shape//8)*5: (tr_shape//8)*6])
-        X_train7 = tf.convert_to_tensor(X_tr[(tr_shape//8)*6: (tr_shape//8)*7])
-        X_train8 = tf.convert_to_tensor(X_tr[(tr_shape//8)*7:])
-        X_train = tf.concat([X_train1, X_train2, X_train3, X_train4, X_train5, X_train6, X_train7, X_train8], axis=0)
-
-        te_shape = X_te.shape[0]
-        X_test1 = tf.convert_to_tensor(X_te[:(te_shape//4)*1])
-        X_test2 = tf.convert_to_tensor(X_te[(te_shape//4)*1:(te_shape//4)*2])
-        X_test3 = tf.convert_to_tensor(X_te[(te_shape//4)*2:(te_shape//4)*3])
-        X_test4 = tf.convert_to_tensor(X_te[(te_shape//4)*3:])
-        X_test = tf.concat([X_test1, X_test2, X_test3, X_test4], axis=0)
-
-        y_train = tf.convert_to_tensor(y_tr)
-        y_test = tf.convert_to_tensor(y_te)
+        X_train, X_test, y_train, y_test = convert_tensors(X_tr, X_te, y_tr, y_te)
 
         print('Standard tensors:')
         print(f'X_train, y_train shapes: {X_train.shape}, {y_train.shape}')
@@ -325,7 +356,7 @@ def prepare_tensors(norm=None):
 
 
 
-with open("ML_TIME/darts_search_arch_genotype_v2.py") as graph_file:
+with open("assets/darts_search_arch_genotype_v2.py") as graph_file:
     graphs = graph_file.readlines()
     epoch = 0
     for i, g in enumerate(graphs):
@@ -352,19 +383,35 @@ def make_gif(frame_folder):
     frame_one.save("/home/msayler/DARTS_gitRepo/Transformer_Algorithms/assets/genotypes.gif", format="GIF", append_images=frames,
                save_all=True, duration=1000, loop=1)
 make_gif(filenames)
-# images = []
-# for filename in filenames:
-#     images.append(imageio.imread(filename))
-# imageio.mimsave('assets/genotypes.gif', images)
 
+print(f"Model Genotype: {final_genotype.normal}\nConcatenation Range: {final_genotype.normal_concat}" )
+
+
+
+final_genotype_normal = final_genotype.normal
 with strategy.scope():
-    DARTS_model = DARTS_Transformer(cfg=cfg, genotype=final_genotype, input_shape=INPUT_SHAPE, num_classes=NUM_CLASSES)
+    DARTS_model = DARTS_Transformer(cfg=cfg,
+                                    genotype=final_genotype_normal,
+                                    input_shape=INPUT_SHAPE,
+                                    num_classes=NUM_CLASSES
+                                    )
+    DARTS_model = DARTS_model.model
 
-DARTS_model = DARTS_model.model
-DARTS_model.summary()
+# DARTS_model.summary()
 plot_model(DARTS_model, to_file='assets/DARTS_model.png', expand_nested=True, show_shapes=True)
 
-checkpoint_filepath = "assets/DARTS_checkpoint_weights.h5"    # path to save checkpoint weights
+with strategy.scope():
+    DARTS_model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
+                    optimizer = Adam(learning_rate=0.001),
+                    metrics={"type":[ 
+                                    CategoricalAccuracy(name="acc"),
+                                    MatthewsCorrelationCoefficient(num_classes=NUM_CLASSES, name ="mcc"),
+                                    F1Score(num_classes=NUM_CLASSES, name='f1_score')
+                                    ] 
+                            }
+                    )
+
+checkpoint_filepath = "assets/DARTS_checkpoints/checkpoints"    # path to save checkpoint weights
 # # uncomment if you want to start the training on pre-existing checkpoint weights
 # DARTS_model.load_weights(checkpoint_filepath)
 
@@ -387,9 +434,10 @@ transformer_model_history = DARTS_model.fit(X_train,
                                                             ]
                                                 )
 
-# train model with normalized data
+# Train model with normalized data
+# Each epoch takes approx. 6 minutes on NVIDIA tesla k80 MirroredStrategy()
 X_train, X_test, y_train, y_test = prepare_tensors(norm=True)
-DARTS_model.load_weights(checkpoint_filepath)
+# DARTS_model.load_weights(checkpoint_filepath)
 transformer_model_history = DARTS_model.fit(X_train,
                                                 y_train,
                                                 epochs = EPOCHS,
@@ -413,8 +461,16 @@ with open('assets/DARTS_model_fault_detr_history_full', 'wb') as file_pi:    # p
 with open('assets/DARTS_model_fault_detr_history_full', "rb") as file_pi:    # path to load model history
     history = pickle.load(file_pi)
 
+# ######################
+#     #Just for testing load function
+# X_train, X_test, y_train, y_test = prepare_tensors(norm=True)
+# ######################
+
 DARTS_model.load_weights(checkpoint_filepath)
-DARTS_model.save('assets/DARTS_transformer_model.keras')  # path to save complete model
+DARTS_model.save('assets/DARTS_transformer_model')  # path to save complete model
+
+# DARTS_model = load_model('assets/DARTS_transformer_model.keras')   # path of complete model
+
 
 
 test_metrics = DARTS_model.evaluate(X_test, y_test)
