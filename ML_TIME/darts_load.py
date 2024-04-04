@@ -56,7 +56,7 @@ from PIL import Image
 # number of classes (including a no fault class)
 NUM_CLASSES = 46
 INPUT_SHAPE = (726, 3)
-EPOCHS = 50
+EPOCHS = 2
 
 Genotype = namedtuple('Genotype', ['normal', 'normal_concat'])
 
@@ -437,7 +437,7 @@ transformer_model_history = DARTS_model.fit(X_train,
 # Train model with normalized data
 # Each epoch takes approx. 6 minutes on NVIDIA tesla k80 MirroredStrategy()
 X_train, X_test, y_train, y_test = prepare_tensors(norm=True)
-# DARTS_model.load_weights(checkpoint_filepath)
+DARTS_model.load_weights(checkpoint_filepath)
 transformer_model_history = DARTS_model.fit(X_train,
                                                 y_train,
                                                 epochs = EPOCHS,
