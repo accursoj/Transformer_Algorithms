@@ -4,25 +4,21 @@ os.environ['XLA_FLAGS'] = '--xla_gpu_cuda_data_dir=/usr/lib/cuda/'
 os.environ['NCCL_DEBUG'] = 'WARN'
 import pickle
 import numpy as np
-import pandas as pd 
 import re
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 import tensorflow as tf
-import keras
 from keras.optimizers import Adam
 from keras.metrics import CategoricalAccuracy
 from tensorflow_addons.metrics import MatthewsCorrelationCoefficient, F1Score
 
-from keras import backend as K
 
-from keras import Model, Sequential
+from keras import Model
 
 from keras.layers import (Input, Reshape, Rescaling, 
-                                    TimeDistributed, MaxPool1D, BatchNormalization, 
+                                    TimeDistributed, MaxPool1D,
                                     Embedding, Dense, Dropout,
-                                    Flatten, Softmax, MultiHeadAttention, LayerNormalization, Add, Concatenate)
+                                    Flatten)
 
 from search_layers import (regularizer, kernel_init, 
                             Zero, MultiHeadEncoderAttention, MultiHeadDecoderAttention,
@@ -30,31 +26,24 @@ from search_layers import (regularizer, kernel_init,
 
 
 from keras.utils import plot_model
-from keras.models import load_model
-import imageio
 
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, roc_curve, auc, matthews_corrcoef
+from sklearn.metrics import confusion_matrix, classification_report, matthews_corrcoef
 
 from keras.callbacks import ModelCheckpoint
 
 
-import gc
 from collections import namedtuple
 
-import sys
-from graphviz import Digraph
 
 from plot_utils import plot
-from plot_utils import train_curves as DARTS_train_curves
 
 from dl_eval_plot_fns import plot_confusion_matrix, plot_roc, train_curves
 
-import glob
 from PIL import Image
 
-# number of classes (including a no fault class)
-NUM_CLASSES = 46
+
+NUM_CLASSES = 46            # number of classes (including a no fault class)
 INPUT_SHAPE = (726, 3)
 EPOCHS = 50
 
@@ -78,7 +67,6 @@ cfg = {
     "init_channels": 64,
     "layers": 4,
     "num_typ_classes": 46,
-    # "num_loc_classes": 15,
     "sub_name": 'darts_search',
 
     # training setting
@@ -86,7 +74,6 @@ cfg = {
     "start_search_epoch": 15,
     "init_lr": 0.001,
     "momentum": 0.9,
-    # "weights_decay": 3e-4,
     "weights_decay": None,
 
     "grad_clip": 10.0,
@@ -164,8 +151,6 @@ class Cell(tf.keras.layers.Layer):
                 s += branch
             offset += 2
             stems.append(s)                                             #Append the summation of operations for this intermediate node in stems[]
-        # concat_list = list(genotype.normal_concat)
-        # return tf.concat([stems[j] for j in concat_list], axis=-1)       #Concatenate the range of intermediate nodes specified in genotype.normal_concat
         return tf.concat([stems[4], stems[5]], axis=-1)       #Concatenate the range of intermediate nodes specified in genotype.normal_concat
 
 
@@ -178,15 +163,9 @@ class DARTS_Transformer(Model):
         self.cfg = cfg
         self.wd = cfg['weights_decay']
 
-        # self.cell = Cell(genotype, ch=self.cfg['init_channels'], wd=self.cfg['weights_decay'])
-        # self.cell = Cell(genotype, wd=self.cfg['weights_decay'])
-
-
-        # self.model = self.build_transformer_model()
         self.model = self._build_model()
     
     def _build_model(self):
-        # wd = self.cfg['weights_decay']
 
         inputs = Input(shape=self._input_shape)
         sig = Rescaling(scale=1.0/6065.3467)(inputs)                #Scale and Normalize inputs
@@ -200,10 +179,6 @@ class DARTS_Transformer(Model):
 
         embeddings = Embedding(input_dim=6, output_dim=64)
 
-        # position_range = Position()
-        # position_embed = embeddings(position_range)
-        # position_range = tf.range(start=0, limit=6, delta=1)
-        # position_embed = embeddings(position_range.numpy())
 
         position_embed = embeddings(tf.range(start=0, limit=6, delta=1))
         sig = sig + position_embed                                  #Element-wise addition of position embeddings
@@ -233,55 +208,6 @@ class DARTS_Transformer(Model):
         return Model(inputs=inputs, outputs=[typ_output])
 
 
-    # def call(self, inputs):
-    #     x = self.cell(inputs, inputs, weights=None)
-    #     x = self.model(x)
-    #     return x
-
-    # def build_transformer_model(self):
-    #     input_sig = Input(shape=(726, 3))   # shape = shape of single data file
-    #     sig = input_sig/6065.3965
-    #     sig = Reshape((6, 121, 3))(sig)     # reshape data file (ex. (726, ...) --> (6, 121, ...))
-    #     sig = TimeDistributed(Flatten())(sig)
-
-    #     sig = Dense(1024, activation="relu")(sig)
-    #     sig = Dropout(0.2)(sig)
-    #     sig = Dense(64, activation="relu")(sig)
-    #     sig = Dropout(0.2)(sig)
-
-    #     embeddings = Embedding(input_dim=6, output_dim=64)  # input_dim = value from reshaped data: Reshape((input_dim, ..., ...))
-    #     position_embed = embeddings(tf.range(start=0, limit=6, delta=1))    # limit = input_dim
-    #     sig = sig + position_embed
-
-    #     for e in range(4):
-    #         sig = TransformerEncoder(sig, num_heads=4, head_size=64, dropout=0.2, units_dim=64)
-
-    #     sig = Flatten()(sig)
-
-    #     typ = Dense(256, activation="relu")(sig)
-    #     typ = Dropout(0.2)(typ)
-    #     typ = Dense(128, activation="relu")(typ)
-    #     typ = Dense(32, activation="relu")(typ)
-    #     typ = Dropout(0.2)(typ)
-    #     typ_output = Dense(NUM_CLASSES, activation="softmax", name="type")(typ)
-
-
-    #     # initalize model
-    #     model = Model(inputs=input_sig, outputs=[typ_output])
-
-    #     model.compile(loss=["categorical_crossentropy", "categorical_crossentropy"], 
-    #                 optimizer = Adam(learning_rate=0.001),
-    #                 metrics={"type":[ 
-    #                                     CategoricalAccuracy(name="acc"),
-    #                                     MatthewsCorrelationCoefficient(num_classes=NUM_CLASSES, name ="mcc"),
-    #                                     F1Score(num_classes=NUM_CLASSES, name='f1_score')
-    #                                 ] 
-    #                             }
-    #                     )
-
-    #     model._name = "DARTS_Transformer_Model"
-
-    #     return model
     
 def convert_tensors(X_tr, X_te, y_tr, y_te):
         print('Converting to tensors...')
@@ -349,11 +275,6 @@ def prepare_tensors(norm=None):
         print(f'X_test, y_test shapes: {X_test.shape}, {y_test.shape}')
 
     return X_train, X_test, y_train, y_test
-
-
-
-
-
 
 
 with open("DiscoveryDay/DARTS_genotypes.py") as graph_file:
