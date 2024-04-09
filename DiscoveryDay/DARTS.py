@@ -112,7 +112,7 @@ cfg = {
     "sub_name": 'darts_search',
 
     # training setting
-    "epoch": 10,
+    "epoch": 80,
     "start_search_epoch": 15,
     "init_lr": 0.001,
     "momentum": 0.9,
